@@ -1,6 +1,6 @@
 ### Get Started By:
-1. Clone the Project: git clone git@github.com:AquagreenRUPP/frontend.git
-2. Add remote: git remote add upstream git@github.com:AquagreenRUPP/frontend.git
+1. Clone the Project: git clone git@github.com:AquagreenRUPP/backend.git
+2. Add remote: git remote add upstream git@github.com:AquagreenRUPP/backend.git
 
 ### Start Server
 1. run: cd data_processor
