@@ -1,0 +1,61 @@
+# ========================
+# Python Virtual Environment
+# ========================
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.lib
+
+# ===========================
+# Pip Dependencies and Logs
+# ===========================
+*.egg-info/
+*.dist-info/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ========================
+# Jupyter Notebooks Cache
+# ========================
+.ipynb_checkpoints/
+
+# ===========================
+# IDE & Editor Settings
+# ===========================
+# VS Code settings
+.vscode/
+
+# ==========================
+# Python Package Files
+# ==========================
+__init__.py
+
+# ==========================
+# Kafka Logs, Data, and Config
+# ==========================
+logs/
+kafka-logs/
+*.log
+*.out
+*.pid
+tmp-kafka-*
+
+# ==========================
+# Kafka License Files
+# ==========================
+LICENSE*
+NOTICE*
+
+# ==========================
+# Kafka JAR and Properties Files
+# ==========================
+*.jar
+*.properties
+
+# ==========================
+# Kafka Site Packages
+# ==========================
+site-packages/
