@@ -23,6 +23,7 @@ from file_uploader.auth import RegisterView, CustomTokenObtainPairView, UserProf
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('file_uploader.urls')),
+    path('api/', include('kafka_producer.urls')),
     
     # Authentication endpoints
     path('api/auth/register/', RegisterView.as_view(), name='register'),

@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework_simplejwt',
     'file_uploader',
+    'kafka_producer'
 ]
 
 MIDDLEWARE = [
