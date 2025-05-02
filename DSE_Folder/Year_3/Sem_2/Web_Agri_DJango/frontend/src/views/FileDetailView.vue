@@ -63,9 +63,6 @@
             <button class="btn btn-sm btn-outline-primary" @click="refreshData">
               <i class="bi bi-arrow-clockwise me-1"></i> Refresh
             </button>
-            <button class="btn btn-sm btn-outline-success" @click="exportCSV">
-              <i class="bi bi-download me-1"></i> Export CSV
-            </button>
           </div>
         </div>
         <div class="card-body">
@@ -78,27 +75,63 @@
           </div>
           
           <div v-else>
-            <!-- Data Table -->
-            <div class="table-responsive">
-              <table class="table table-striped table-hover">
-                <thead>
-                  <tr>
-                    <th v-for="(_, key) in processedData[0]" :key="key">{{ formatColumnName(key) }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(row, index) in processedData" :key="index">
-                    <td v-for="(value, key) in row" :key="key">{{ value }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <!-- Excel Viewer -->
+            <excel-viewer 
+              :data="processedData" 
+              @export-csv="exportCSV"
+            />
             
-            <!-- Power BI Iframe Preview Placeholder -->
+            <!-- Data Visualization Section -->
             <div class="mt-4">
-              <h5>Data Visualization</h5>
-              <div class="alert alert-info">
-                Power BI integration will be available in a future update.
+              <h5 class="mb-3">Data Visualization</h5>
+              
+              <div class="row">
+                <!-- Soil Metrics Charts -->
+                <div class="col-md-6 mb-4">
+                  <chart-container
+                    v-if="soilMetricsData.datasets.length > 0"
+                    title="Soil Metrics Comparison"
+                    :chart-data="soilMetricsData"
+                    :options="barChartOptions"
+                    description="Comparison of soil pH, moisture, temperature and EC"
+                    initial-chart-type="bar"
+                  />
+                </div>
+                
+                <!-- Plant Health Chart -->
+                <div class="col-md-6 mb-4">
+                  <chart-container
+                    v-if="plantHealthData.datasets.length > 0"
+                    title="Plant Health Metrics"
+                    :chart-data="plantHealthData"
+                    :options="lineChartOptions"
+                    description="Death plants count over time"
+                  />
+                </div>
+                
+                <!-- Financial Overview -->
+                <div class="col-md-6 mb-4">
+                  <chart-container
+                    v-if="financialData.labels.length > 0"
+                    title="Financial Overview"
+                    :chart-data="financialData"
+                    :options="pieChartOptions"
+                    description="Income vs Expenses breakdown"
+                    initial-chart-type="pie"
+                  />
+                </div>
+                
+                <!-- Soil pH Distribution -->
+                <div class="col-md-6 mb-4">
+                  <chart-container
+                    v-if="soilPhDistributionData.labels.length > 0"
+                    title="Soil pH Distribution"
+                    :chart-data="soilPhDistributionData"
+                    :options="pieChartOptions"
+                    description="Distribution of soil pH levels"
+                    initial-chart-type="pie"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -110,22 +143,220 @@
 
 <script>
 import { mapState, mapActions } from 'vuex'
+import ChartContainer from '@/components/charts/ChartContainer.vue'
+import ExcelViewer from '@/components/ExcelViewer.vue'
 
 export default {
   name: 'FileDetailView',
-  props: {
-    id: {
-      type: [String, Number],
-      required: true
-    }
+  components: {
+    ChartContainer,
+    ExcelViewer
   },
+  // Remove props and use route params directly
   data() {
     return {
-      processingFile: false
+      processingFile: false,
+      barChartOptions: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Value'
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'top'
+          }
+        }
+      },
+      lineChartOptions: {
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Count'
+            }
+          }
+        }
+      },
+      pieChartOptions: {
+        plugins: {
+          legend: {
+            position: 'right'
+          }
+        }
+      },
+      // Sample financial data - this would typically come from your backend
+      financialSummary: {
+        income: 12500,
+        expenses: 7800,
+        categories: {
+          income: {
+            'Crop Sales': 9500,
+            'Equipment Rental': 2000,
+            'Subsidies': 1000
+          },
+          expenses: {
+            'Seeds': 1200,
+            'Fertilizer': 2500,
+            'Labor': 3000,
+            'Equipment': 1100
+          }
+        }
+      }
     }
   },
   computed: {
-    ...mapState(['currentFile', 'processedData', 'loading', 'error'])
+    ...mapState(['currentFile', 'processedData', 'loading', 'error']),
+    
+    // Soil metrics chart data
+    soilMetricsData() {
+      if (!this.processedData || !this.processedData.length) return { labels: [], datasets: [] };
+      
+      // Get record numbers for labels
+      const labels = this.processedData.map(item => `Record ${item.record_no || ''}`).slice(0, 10);
+      
+      // Extract soil metrics data
+      const soilPhData = this.processedData.map(item => parseFloat(item.soil_ph || 0)).slice(0, 10);
+      const soilMoistureData = this.processedData.map(item => parseFloat(item.soil_moisture || 0)).slice(0, 10);
+      const soilTempData = this.processedData.map(item => parseFloat(item.soil_temp || 0)).slice(0, 10);
+      const soilEcData = this.processedData.map(item => parseFloat(item.soil_ec || 0) * 100).slice(0, 10); // Scale EC for visibility
+      
+      return {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Soil pH',
+            data: soilPhData,
+            backgroundColor: 'rgba(255, 99, 132, 0.7)',
+            borderColor: 'rgb(255, 99, 132)',
+            borderWidth: 1
+          },
+          {
+            label: 'Soil Moisture',
+            data: soilMoistureData,
+            backgroundColor: 'rgba(54, 162, 235, 0.7)',
+            borderColor: 'rgb(54, 162, 235)',
+            borderWidth: 1
+          },
+          {
+            label: 'Soil Temp',
+            data: soilTempData,
+            backgroundColor: 'rgba(255, 206, 86, 0.7)',
+            borderColor: 'rgb(255, 206, 86)',
+            borderWidth: 1
+          },
+          {
+            label: 'Soil EC (x100)',
+            data: soilEcData,
+            backgroundColor: 'rgba(75, 192, 192, 0.7)',
+            borderColor: 'rgb(75, 192, 192)',
+            borderWidth: 1
+          }
+        ]
+      };
+    },
+    
+    // Plant health data
+    plantHealthData() {
+      if (!this.processedData || !this.processedData.length) return { labels: [], datasets: [] };
+      
+      // Get dates for labels
+      const labels = this.processedData.map(item => item.date || '');
+      
+      // Extract plant health data
+      const deathPlantsData = this.processedData.map(item => parseInt(item.death_plants || 0));
+      
+      return {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Death Plants',
+            data: deathPlantsData,
+            borderColor: 'rgb(255, 99, 132)',
+            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+            borderWidth: 2,
+            tension: 0.2,
+            fill: true
+          }
+        ]
+      };
+    },
+    
+    // Financial data for income/expense tracking
+    financialData() {
+      // This would typically come from your backend
+      // Using sample data for now
+      return {
+        labels: ['Income', 'Expenses'],
+        datasets: [
+          {
+            data: [this.financialSummary.income, this.financialSummary.expenses],
+            backgroundColor: [
+              'rgba(75, 192, 192, 0.7)',
+              'rgba(255, 99, 132, 0.7)'
+            ],
+            borderColor: [
+              'rgb(75, 192, 192)',
+              'rgb(255, 99, 132)'
+            ],
+            borderWidth: 1
+          }
+        ]
+      };
+    },
+    
+    // Soil pH distribution data
+    soilPhDistributionData() {
+      if (!this.processedData || !this.processedData.length) return { labels: [], datasets: [] };
+      
+      // Count occurrences of different pH ranges
+      const phRanges = {
+        'Very Acidic (<5.5)': 0,
+        'Acidic (5.5-6.5)': 0,
+        'Neutral (6.5-7.5)': 0,
+        'Alkaline (>7.5)': 0
+      };
+      
+      this.processedData.forEach(item => {
+        const ph = parseFloat(item.soil_ph || 0);
+        if (ph < 5.5) {
+          phRanges['Very Acidic (<5.5)']++;
+        } else if (ph >= 5.5 && ph < 6.5) {
+          phRanges['Acidic (5.5-6.5)']++;
+        } else if (ph >= 6.5 && ph < 7.5) {
+          phRanges['Neutral (6.5-7.5)']++;
+        } else if (ph >= 7.5) {
+          phRanges['Alkaline (>7.5)']++;
+        }
+      });
+      
+      return {
+        labels: Object.keys(phRanges),
+        datasets: [
+          {
+            data: Object.values(phRanges),
+            backgroundColor: [
+              'rgba(255, 99, 132, 0.7)',
+              'rgba(255, 206, 86, 0.7)',
+              'rgba(75, 192, 192, 0.7)',
+              'rgba(153, 102, 255, 0.7)'
+            ],
+            borderColor: [
+              'rgb(255, 99, 132)',
+              'rgb(255, 206, 86)',
+              'rgb(75, 192, 192)',
+              'rgb(153, 102, 255)'
+            ],
+            borderWidth: 1
+          }
+        ]
+      };
+    }
   },
   mounted() {
     this.fetchFileData()
@@ -133,8 +364,20 @@ export default {
   methods: {
     ...mapActions(['fetchFile', 'fetchProcessedData', 'processFile']),
     fetchFileData() {
-      this.$store.dispatch('fetchFile', this.id)
-      this.$store.dispatch('fetchProcessedData', this.id)
+      // Get ID from route params
+      const fileId = this.$route.params.id;
+      
+      // Validate ID before making API calls
+      if (!fileId || fileId === 'undefined' || fileId === 'null') {
+        console.error('Invalid file ID:', fileId);
+        this.$toast.error('Invalid file ID');
+        this.$router.push('/files');
+        return;
+      }
+      
+      console.log('Fetching file data for ID:', fileId);
+      this.$store.dispatch('fetchFile', fileId);
+      this.$store.dispatch('fetchProcessedData', fileId);
     },
     refreshData() {
       this.fetchFileData()

@@ -110,10 +110,23 @@ export default {
     }
   },
   created() {
-    this.fetchFiles()
+    this.loadFiles()
   },
   methods: {
     ...mapActions(['fetchFiles', 'processFile']),
+    async loadFiles() {
+      try {
+        console.log('Fetching files...');
+        const files = await this.$store.dispatch('fetchFiles');
+        console.log('Files fetched:', files);
+        if (files && files.length === 0) {
+          console.log('No files returned from API');
+        }
+      } catch (error) {
+        console.error('Error fetching files:', error);
+        this.$toast.error('Failed to load files');
+      }
+    },
     async processFile(fileId) {
       this.processingFile = fileId
       

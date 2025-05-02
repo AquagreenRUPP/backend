@@ -112,25 +112,31 @@ export default {
         this.$router.push('/');
       } catch (error) {
         console.error('Registration error:', error);
-        if (error.response && error.response.data) {
-          // Handle different types of error responses
+        // Defensive: handle all possible error shapes
+        let errorMsg = 'Registration failed. Please try again.';
+        if (error && error.response && error.response.data) {
           const errorData = error.response.data;
-          if (typeof errorData === 'string') {
-            this.error = errorData;
+          if (errorData.errors) {
+            // Backend returned { success: false, errors: {...} }
+            const errorMessages = [];
+            for (const field in errorData.errors) {
+              const messages = Array.isArray(errorData.errors[field]) ? errorData.errors[field].join(', ') : errorData.errors[field];
+              errorMessages.push(`${field}: ${messages}`);
+            }
+            errorMsg = errorMessages.join('\n');
+          } else if (typeof errorData === 'string') {
+            errorMsg = errorData;
           } else if (typeof errorData === 'object') {
-            // Format field-specific errors
+            // Fallback: show all fields as error messages
             const errorMessages = [];
             for (const field in errorData) {
               const messages = Array.isArray(errorData[field]) ? errorData[field].join(', ') : errorData[field];
               errorMessages.push(`${field}: ${messages}`);
             }
-            this.error = errorMessages.join('\n');
-          } else {
-            this.error = 'Registration failed. Please try again.';
+            errorMsg = errorMessages.join('\n');
           }
-        } else {
-          this.error = 'Registration failed. Please try again.';
         }
+        this.error = errorMsg;
       } finally {
         this.loading = false;
       }

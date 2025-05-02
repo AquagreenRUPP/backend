@@ -37,16 +37,33 @@
           <div v-if="fileError" class="alert alert-danger">
             {{ fileError }}
           </div>
-          
-          <div class="d-grid gap-2">
-            <button
-              type="submit"
-              class="btn btn-success"
-              :disabled="loading || !file"
-            >
-              <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
-              Upload and Process
+          <div v-if="previewError" class="alert alert-danger">
+            {{ previewError }}
+          </div>
+          <div class="d-flex gap-2 mb-3">
+            <button type="button" class="btn btn-info" :disabled="!file || previewLoading" @click="previewFile">
+              <span v-if="previewLoading" class="spinner-border spinner-border-sm me-2"></span>
+              Preview Data
             </button>
+            <button type="submit" class="btn btn-success" :disabled="loading || !file || !previewData.length">
+              <span v-if="loading" class="spinner-border spinner-border-sm me-2"></span>
+              Confirm Upload
+            </button>
+          </div>
+          <div v-if="previewData.length">
+            <h5>Data Preview (first 5 rows)</h5>
+            <table class="table table-bordered">
+              <thead>
+                <tr>
+                  <th v-for="header in Object.keys(previewData[0])" :key="header">{{ header }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(row, idx) in previewData" :key="idx">
+                  <td v-for="header in Object.keys(row)" :key="header">{{ row[header] }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </form>
       </div>
@@ -87,6 +104,7 @@
 
 <script>
 import { mapState, mapActions } from 'vuex';
+import * as XLSX from 'xlsx';
 
 export default {
   name: 'UploadView',
@@ -94,7 +112,10 @@ export default {
     return {
       title: '',
       file: null,
-      fileError: null
+      fileError: null,
+      previewData: [],
+      previewLoading: false,
+      previewError: null
     };
   },
   computed: {
@@ -129,6 +150,41 @@ export default {
       
       this.file = selectedFile;
     },
+    async previewFile() {
+      this.previewError = null;
+      this.previewLoading = true;
+      try {
+        this.previewData = await this.parseExcel(this.file);
+      } catch (err) {
+        this.previewError = 'Failed to parse file';
+      } finally {
+        this.previewLoading = false;
+      }
+    },
+    parseExcel(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheet];
+          const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          const headers = json[0] || [];
+          const rows = json.slice(1, 6);
+          const result = rows.map(row => {
+            const obj = {};
+            headers.forEach((header, idx) => {
+              obj[header] = row[idx];
+            });
+            return obj;
+          });
+          resolve(result);
+        };
+        reader.onerror = err => reject(err);
+        reader.readAsArrayBuffer(file);
+      });
+    },
     async uploadFile() {
       if (!this.file) {
         this.fileError = 'Please select a file to upload';
@@ -136,10 +192,13 @@ export default {
       }
       
       try {
-        await this.$store.dispatch('uploadFile', {
+        console.log('Starting file upload...');
+        const response = await this.$store.dispatch('uploadFile', {
           title: this.title,
           file: this.file
         });
+        
+        console.log('Upload successful:', response);
         
         // Reset form
         this.title = '';
@@ -149,9 +208,14 @@ export default {
         // Show success message
         this.$toast.success('File uploaded successfully');
         
-        // Redirect to files page
-        this.$router.push('/files');
+        // Wait a moment to ensure files are fetched before navigation
+        setTimeout(() => {
+          // Redirect to files page
+          console.log('Redirecting to files page...');
+          this.$router.push('/files');
+        }, 500);
       } catch (error) {
+        console.error('Upload error in component:', error);
         this.fileError = error.message || 'Failed to upload file';
       }
     }
