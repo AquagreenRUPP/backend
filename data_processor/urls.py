@@ -24,6 +24,7 @@ from django.contrib.auth import views as auth_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('file_uploader.urls')),
+    path('api/', include('kafka_producer.urls')),
     
     # Authentication endpoints
     path('api/auth/register/', RegisterView.as_view(), name='register'),
