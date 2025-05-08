@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from .models import ExcelFile, ProcessedData
 from .serializers import ExcelFileSerializer, ProcessedDataSerializer
 from .excel_utils import process_excel_file
-from .kafka_utils import KafkaProducer
+from .kafka_utils import kafka_producer
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,23 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Filter files to only show those belonging to the current user"""
-        return ExcelFile.objects.filter(user=self.request.user)
+        user = self.request.user
+        logger.info(f"Fetching files for user: {user.username} (ID: {user.id})")
+        
+        # Get all files for this user
+        queryset = ExcelFile.objects.filter(user=user)
+        logger.info(f"Found {queryset.count()} files for user {user.username}")
+        
+        return queryset
+        
+    def list(self, request, *args, **kwargs):
+        """Override list method to add debugging"""
+        queryset = self.filter_queryset(self.get_queryset())
+        
+        logger.info(f"Listing files for user {request.user.username}, found {queryset.count()} files")
+        
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
     
     def perform_create(self, serializer):
         """Associate the uploaded file with the current user"""
@@ -29,18 +45,21 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
     
     def create(self, request, *args, **kwargs):
         """Handle file upload and process it."""
+        logger.info(f"File upload request from user: {request.user.username}")
         serializer = self.get_serializer(data=request.data)
+        
         if serializer.is_valid():
-            # Save the uploaded file
-            excel_file = serializer.save()
+            # Save the uploaded file and associate with the current user
+            excel_file = serializer.save(user=request.user)
+            logger.info(f"File saved: {excel_file.title} (ID: {excel_file.id}) for user {request.user.username}")
             
             # Process the Excel file
             try:
                 # Process the file and get the processed data
                 processed_data = process_excel_file(excel_file)
+                logger.info(f"File processed: {excel_file.title}, extracted {len(processed_data)} data points")
                 
                 # Publish data to Kafka
-                kafka_producer = KafkaProducer()
                 for data in processed_data:
                     kafka_producer.publish_data(data.data_json)
                 
@@ -48,17 +67,27 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
                 excel_file.processed = True
                 excel_file.save()
                 
+                # Re-serialize to include the user field
+                updated_serializer = self.get_serializer(excel_file)
+                
                 return Response({
-                    'file': serializer.data,
+                    'success': True,
+                    'file': updated_serializer.data,
                     'message': 'File uploaded and processed successfully'
                 }, status=status.HTTP_201_CREATED)
             except Exception as e:
+                logger.error(f"Error processing file: {str(e)}")
                 return Response({
+                    'success': False,
                     'file': serializer.data,
                     'error': str(e)
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        logger.warning(f"Invalid file upload data: {serializer.errors}")
+        return Response({
+            'success': False,
+            'errors': serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])
     def process(self, request, pk=None):
@@ -78,7 +107,6 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
             processed_data = process_excel_file(excel_file)
             
             # Publish data to Kafka
-            kafka_producer = KafkaProducer()
             for data in processed_data:
                 kafka_producer.publish_data(data.data_json)
             
@@ -115,17 +143,47 @@ class ProcessedDataViewSet(viewsets.ReadOnlyModelViewSet):
         Get processed data for a specific file
         """
         file_id = request.query_params.get('file_id')
-        if not file_id:
+        
+        # Handle missing or invalid file_id
+        if not file_id or file_id == 'undefined' or file_id == 'null':
+            logger.warning(f"Invalid file_id provided: {file_id}")
             return Response(
-                {"error": "file_id parameter is required"},
+                {"success": False, "error": "Valid file_id parameter is required"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Get the file and verify it belongs to the user
-        excel_file = get_object_or_404(ExcelFile, id=file_id, user=request.user)
-        
-        # Get processed data for the file
-        data = ProcessedData.objects.filter(excel_file=excel_file)
-        serializer = self.get_serializer(data, many=True)
-        
-        return Response(serializer.data)
+        try:
+            # Get the file and verify it belongs to the user
+            excel_file = get_object_or_404(ExcelFile, id=file_id, user=request.user)
+            
+            # Get processed data for the file
+            data = ProcessedData.objects.filter(excel_file=excel_file)
+            
+            # If there's no data, return an empty response
+            if not data.exists():
+                return Response({
+                    "success": True,
+                    "data": []
+                })
+            
+            # Extract the actual data from the JSON field
+            # This transforms the data from [{"data_json": [...]}] to just [...]
+            processed_data = []
+            for item in data:
+                if isinstance(item.data_json, list):
+                    processed_data.extend(item.data_json)
+                else:
+                    processed_data.append(item.data_json)
+            
+            logger.info(f"Returning {len(processed_data)} processed data records for file {file_id}")
+            
+            return Response({
+                "success": True,
+                "data": processed_data
+            })
+        except Exception as e:
+            logger.error(f"Error retrieving processed data: {str(e)}")
+            return Response(
+                {"success": False, "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
