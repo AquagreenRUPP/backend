@@ -1,84 +1,94 @@
 from django.contrib.auth.models import User
-from rest_framework import serializers, status, permissions
+from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-
-
-class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
-    email = serializers.EmailField(required=False, allow_blank=True)
-    phone = serializers.CharField(required=False, allow_blank=True, write_only=True)
-
-    class Meta:
-        model = User
-        fields = ('id', 'username', 'password', 'email', 'phone', 'first_name', 'last_name')
-        extra_kwargs = {
-            'password': {'write_only': True},
-            'first_name': {'read_only': True},
-            'last_name': {'read_only': True}
-        }
-
-    def create(self, validated_data):
-        email = validated_data.pop('email', '')
-        phone = validated_data.pop('phone', '')
-        
-        # Create user with username and password
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            password=validated_data['password'],
-            email=email
-        )
-        
-        return user
-
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from .serializers import UserSerializer
 
 class RegisterView(APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [AllowAny]
     
     def post(self, request):
-        serializer = UserSerializer(data=request.data)
-        if serializer.is_valid():
-            user = serializer.save()
+        try:
+            # Extract data from request
+            username = request.data.get('username')
+            email = request.data.get('email')
+            password = request.data.get('password')
+            
+            # Validate required fields
+            if not username or not email or not password:
+                return Response(
+                    {"errors": "Username, email, and password are required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if user already exists
+            if User.objects.filter(username=username).exists():
+                return Response(
+                    {"errors": "User with this username already exists"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if User.objects.filter(email=email).exists():
+                return Response(
+                    {"errors": "User with this email already exists"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Validate password strength
+            try:
+                validate_password(password)
+            except ValidationError as e:
+                return Response(
+                    {"errors": " ".join(e.messages)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Create user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password
+            )
+            
+            # Generate tokens for the new user
             refresh = RefreshToken.for_user(user)
             
             return Response({
-                'success': True,
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-                'user': UserSerializer(user).data
+                "success": True,
+                "message": "User registered successfully",
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "user": UserSerializer(user).data
             }, status=status.HTTP_201_CREATED)
-        
-        return Response({
-            'success': False,
-            'errors': serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
-
-
-class UserProfileView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get(self, request):
-        serializer = UserSerializer(request.user)
-        return Response(serializer.data)
-    
-    def put(self, request):
-        serializer = UserSerializer(request.user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+            
+        except Exception as e:
+            return Response(
+                {"errors": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
+        
         if response.status_code == 200:
-            try:
-                user = User.objects.get(username=request.data['username'])
-                response.data['user'] = UserSerializer(user).data
-            except User.DoesNotExist:
-                # If user doesn't exist, don't add user data to response
-                pass
+            # Get the user object
+            user = User.objects.get(username=request.data.get('username'))
+            
+            # Add user data to response
+            response.data['user'] = UserSerializer(user).data
+            response.data['success'] = True
+        
         return response
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data)

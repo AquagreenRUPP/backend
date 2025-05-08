@@ -17,28 +17,32 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from rest_framework_simplejwt.views import TokenRefreshView
 from file_uploader.auth import RegisterView, CustomTokenObtainPairView, UserProfileView
-from django.contrib.auth import views as auth_views
+from rest_framework_simplejwt.views import TokenRefreshView
+from file_uploader.views import ExcelFileViewSet, CropImageViewSet, CsvFileViewSet
+from rest_framework.routers import DefaultRouter
+
+# Create a router for direct API access
+api_router = DefaultRouter()
+api_router.register(r'excel-files', ExcelFileViewSet)
+api_router.register(r'crop-images', CropImageViewSet)
+api_router.register(r'csv-files', CsvFileViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/', include('file_uploader.urls')),
-    path('api/', include('kafka_producer.urls')),
+    
+    # API endpoints
+    path('api/file-uploader/', include('file_uploader.urls')),
+    # Direct API endpoints without the file-uploader prefix
+    path('api/', include(api_router.urls)),
     
     # Authentication endpoints
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='login'),
-    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/profile/', UserProfileView.as_view(), name='user_profile'),
-    
-    # Password reset endpoints
-    path('api/auth/password-reset/', auth_views.PasswordResetView.as_view(), name='password_reset'),
-    path('api/auth/password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
-    path('api/auth/reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
-    path('api/auth/reset/done/', auth_views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
 ]
 
-# Add URL patterns for media files
+# Serve media files in development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

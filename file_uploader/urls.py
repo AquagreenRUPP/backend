@@ -1,15 +1,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import views
-from . import crop_views
+from .views import ExcelFileViewSet, CropImageViewSet, CsvFileViewSet
 
 router = DefaultRouter()
-router.register(r'excel-files', views.ExcelFileViewSet)
-
-# Register crop image system endpoints
-router.register(r'csv-files', crop_views.CsvFileViewSet)
-router.register(r'crop-images', crop_views.CropImageViewSet)
-router.register(r'crop-metadata', crop_views.CropMetadataViewSet)
+router.register(r'excel-files', ExcelFileViewSet)
+router.register(r'crop-images', CropImageViewSet)
+router.register(r'csv-files', CsvFileViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),

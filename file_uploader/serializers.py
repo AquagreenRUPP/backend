@@ -1,28 +1,61 @@
 from rest_framework import serializers
-from .models import ExcelFile, ProcessedData
+from .models import ExcelFile, CropImage, ImageMetadata, CsvFile
 from django.contrib.auth.models import User
 
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer for the User model."""
-    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name']
         read_only_fields = ['id']
 
+class ImageMetadataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ImageMetadata
+        fields = ['id', 'label', 'value']
+        read_only_fields = ['id']
+
+class CropImageSerializer(serializers.ModelSerializer):
+    metadata = ImageMetadataSerializer(many=True, read_only=True)
+    uploaded_by = UserSerializer(read_only=True)
+    image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = CropImage
+        fields = ['id', 'sample_id', 'image', 'image_url', 'description', 'uploaded_by', 'uploaded_at', 'metadata']
+        read_only_fields = ['id', 'uploaded_at', 'uploaded_by', 'image_url']
+    
+    def get_image_url(self, obj):
+        request = self.context.get('request')
+        if obj.image and hasattr(obj.image, 'url') and request:
+            return request.build_absolute_uri(obj.image.url)
+        return None
+
 class ExcelFileSerializer(serializers.ModelSerializer):
-    """Serializer for the ExcelFile model."""
-    user = UserSerializer(read_only=True)
+    uploaded_by = UserSerializer(read_only=True)
+    file_url = serializers.SerializerMethodField()
     
     class Meta:
         model = ExcelFile
-        fields = ['id', 'title', 'file', 'uploaded_at', 'processed', 'user']
-        read_only_fields = ['uploaded_at', 'processed', 'user']
+        fields = ['id', 'title', 'file', 'file_url', 'uploaded_by', 'uploaded_at', 'processed']
+        read_only_fields = ['id', 'uploaded_at', 'processed', 'uploaded_by', 'file_url']
+    
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and hasattr(obj.file, 'url') and request:
+            return request.build_absolute_uri(obj.file.url)
+        return None
 
-class ProcessedDataSerializer(serializers.ModelSerializer):
-    """Serializer for the ProcessedData model."""
+class CsvFileSerializer(serializers.ModelSerializer):
+    uploaded_by = UserSerializer(read_only=True)
+    file_url = serializers.SerializerMethodField()
     
     class Meta:
-        model = ProcessedData
-        fields = ['id', 'excel_file', 'data_json', 'created_at']
-        read_only_fields = ['created_at']
+        model = CsvFile
+        fields = ['id', 'name', 'file', 'file_url', 'uploaded_by', 'uploaded_at', 'processed']
+        read_only_fields = ['id', 'uploaded_at', 'processed', 'uploaded_by', 'file_url']
+    
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and hasattr(obj.file, 'url') and request:
+            return request.build_absolute_uri(obj.file.url)
+        return None

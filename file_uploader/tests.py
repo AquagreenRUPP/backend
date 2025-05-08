@@ -5,7 +5,8 @@ from rest_framework import status
 import os
 import pandas as pd
 from io import BytesIO
-from .models import ExcelFile, ProcessedData
+from .models import ExcelFile
+from django.contrib.auth.models import User
 
 class FileUploadTest(TestCase):
     """Test case for file upload functionality."""
@@ -13,6 +14,14 @@ class FileUploadTest(TestCase):
     def setUp(self):
         """Set up test environment."""
         self.client = APIClient()
+        
+        # Create a test user
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            password='testpassword'
+        )
+        self.client.force_authenticate(user=self.user)
         
         # Create a test Excel file
         self.excel_data = {
@@ -44,13 +53,28 @@ class FileUploadTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(ExcelFile.objects.count(), 1)
         
-        # Check if file was processed
+        # Check file details
         excel_file = ExcelFile.objects.first()
-        self.assertTrue(excel_file.processed)
+        self.assertEqual(excel_file.title, 'Test Excel File')
+        self.assertEqual(excel_file.uploaded_by, self.user)
+
+class CropImageTest(TestCase):
+    """Test case for crop image functionality."""
+    
+    def setUp(self):
+        """Set up test environment."""
+        self.client = APIClient()
         
-        # Check if processed data was created
-        self.assertEqual(ProcessedData.objects.count(), 1)
+        # Create a test user
+        self.user = User.objects.create_user(
+            username='testuser',
+            email='test@example.com',
+            password='testpassword'
+        )
+        self.client.force_authenticate(user=self.user)
         
-        # Check processed data content
-        processed_data = ProcessedData.objects.first()
-        self.assertEqual(len(processed_data.data_json), 3)  # 3 rows in our test data
+    def test_crop_image_list(self):
+        """Test crop image listing."""
+        url = reverse('cropimage-list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

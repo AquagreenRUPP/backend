@@ -1,189 +1,211 @@
-from django.shortcuts import get_object_or_404
-from rest_framework import viewsets, status
-from rest_framework.decorators import action
+from rest_framework import viewsets, status, permissions
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from .models import ExcelFile, ProcessedData
-from .serializers import ExcelFileSerializer, ProcessedDataSerializer
+from rest_framework.decorators import action
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from .models import ExcelFile, CropImage, ImageMetadata, CsvFile
+from .serializers import ExcelFileSerializer, CropImageSerializer, ImageMetadataSerializer, CsvFileSerializer
 from .excel_utils import process_excel_file
-from .kafka_utils import kafka_producer
-import logging
-
-logger = logging.getLogger(__name__)
+import pandas as pd
+import json
+import os
+from django.conf import settings
+from django.contrib.auth.models import User
 
 class ExcelFileViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing Excel files
-    """
-    queryset = ExcelFile.objects.all()
+    queryset = ExcelFile.objects.all().order_by('-uploaded_at')
     serializer_class = ExcelFileSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        """Filter files to only show those belonging to the current user"""
-        user = self.request.user
-        logger.info(f"Fetching files for user: {user.username} (ID: {user.id})")
-        
-        # Get all files for this user
-        queryset = ExcelFile.objects.filter(user=user)
-        logger.info(f"Found {queryset.count()} files for user {user.username}")
-        
-        return queryset
-        
-    def list(self, request, *args, **kwargs):
-        """Override list method to add debugging"""
-        queryset = self.filter_queryset(self.get_queryset())
-        
-        logger.info(f"Listing files for user {request.user.username}, found {queryset.count()} files")
-        
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+    permission_classes = [permissions.IsAuthenticated]
     
     def perform_create(self, serializer):
-        """Associate the uploaded file with the current user"""
-        serializer.save(user=self.request.user)
+        serializer.save(uploaded_by=self.request.user)
     
-    def create(self, request, *args, **kwargs):
-        """Handle file upload and process it."""
-        logger.info(f"File upload request from user: {request.user.username}")
-        serializer = self.get_serializer(data=request.data)
-        
-        if serializer.is_valid():
-            # Save the uploaded file and associate with the current user
-            excel_file = serializer.save(user=request.user)
-            logger.info(f"File saved: {excel_file.title} (ID: {excel_file.id}) for user {request.user.username}")
-            
-            # Process the Excel file
-            try:
-                # Process the file and get the processed data
-                processed_data = process_excel_file(excel_file)
-                logger.info(f"File processed: {excel_file.title}, extracted {len(processed_data)} data points")
-                
-                # Publish data to Kafka
-                for data in processed_data:
-                    kafka_producer.publish_data(data.data_json)
-                
-                # Mark the file as processed
-                excel_file.processed = True
-                excel_file.save()
-                
-                # Re-serialize to include the user field
-                updated_serializer = self.get_serializer(excel_file)
-                
-                return Response({
-                    'success': True,
-                    'file': updated_serializer.data,
-                    'message': 'File uploaded and processed successfully'
-                }, status=status.HTTP_201_CREATED)
-            except Exception as e:
-                logger.error(f"Error processing file: {str(e)}")
-                return Response({
-                    'success': False,
-                    'file': serializer.data,
-                    'error': str(e)
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        logger.warning(f"Invalid file upload data: {serializer.errors}")
-        return Response({
-            'success': False,
-            'errors': serializer.errors
-        }, status=status.HTTP_400_BAD_REQUEST)
+    def get_queryset(self):
+        # Filter to only show files uploaded by the current user
+        return ExcelFile.objects.filter(uploaded_by=self.request.user).order_by('-uploaded_at')
     
     @action(detail=True, methods=['post'])
     def process(self, request, pk=None):
-        """
-        Process the Excel file and extract data
-        """
         excel_file = self.get_object()
         
-        if excel_file.processed:
-            return Response(
-                {"message": "File has already been processed."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
         try:
-            # Process the file and get the processed data
+            # Process the file
             processed_data = process_excel_file(excel_file)
             
-            # Publish data to Kafka
-            for data in processed_data:
-                kafka_producer.publish_data(data.data_json)
-            
-            # Mark the file as processed
-            excel_file.processed = True
-            excel_file.save()
-            
-            return Response(
-                {"message": "File processed successfully."},
-                status=status.HTTP_200_OK
-            )
-        except Exception as e:
-            return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
-
-
-class ProcessedDataViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    ViewSet for retrieving processed data
-    """
-    queryset = ProcessedData.objects.all()
-    serializer_class = ProcessedDataSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_queryset(self):
-        """Filter data to only show those belonging to the current user's files"""
-        return ProcessedData.objects.filter(excel_file__user=self.request.user)
-    
-    @action(detail=False, methods=['get'])
-    def by_file(self, request):
-        """
-        Get processed data for a specific file
-        """
-        file_id = request.query_params.get('file_id')
-        
-        # Handle missing or invalid file_id
-        if not file_id or file_id == 'undefined' or file_id == 'null':
-            logger.warning(f"Invalid file_id provided: {file_id}")
-            return Response(
-                {"success": False, "error": "Valid file_id parameter is required"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            # Get the file and verify it belongs to the user
-            excel_file = get_object_or_404(ExcelFile, id=file_id, user=request.user)
-            
-            # Get processed data for the file
-            data = ProcessedData.objects.filter(excel_file=excel_file)
-            
-            # If there's no data, return an empty response
-            if not data.exists():
-                return Response({
-                    "success": True,
-                    "data": []
-                })
-            
-            # Extract the actual data from the JSON field
-            # This transforms the data from [{"data_json": [...]}] to just [...]
-            processed_data = []
-            for item in data:
-                if isinstance(item.data_json, list):
-                    processed_data.extend(item.data_json)
-                else:
-                    processed_data.append(item.data_json)
-            
-            logger.info(f"Returning {len(processed_data)} processed data records for file {file_id}")
-            
             return Response({
-                "success": True,
-                "data": processed_data
+                'message': 'File processed successfully',
+                'preview': processed_data[:5] if len(processed_data) > 5 else processed_data
             })
         except Exception as e:
-            logger.error(f"Error retrieving processed data: {str(e)}")
-            return Response(
-                {"success": False, "error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['get'])
+    def preview(self, request, pk=None):
+        excel_file = self.get_object()
+        
+        try:
+            file_path = excel_file.file.path
+            # Read the Excel file
+            df = pd.read_excel(file_path)
+            
+            # Convert to JSON for preview (first 5 rows)
+            preview_data = df.head(5).to_dict('records')
+            
+            return Response({
+                'preview': preview_data
+            })
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class CropImageViewSet(viewsets.ModelViewSet):
+    queryset = CropImage.objects.all().order_by('-uploaded_at')
+    serializer_class = CropImageSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        instance = serializer.save(uploaded_by=self.request.user)
+        
+        # Process metadata if provided
+        metadata = self.request.data.get('metadata', [])
+        if isinstance(metadata, list):
+            for meta_item in metadata:
+                if 'label' in meta_item and 'value' in meta_item:
+                    ImageMetadata.objects.create(
+                        image=instance,
+                        label=meta_item['label'],
+                        value=meta_item['value']
+                    )
+    
+    def get_queryset(self):
+        # Filter to only show images uploaded by the current user
+        return CropImage.objects.filter(uploaded_by=self.request.user).order_by('-uploaded_at')
+    
+    @action(detail=False, methods=['post'])
+    def upload_images(self, request):
+        """Upload multiple crop images in one request"""
+        csv_file_id = request.data.get('csv_file')
+        sample_id_prefix = request.data.get('sample_id_prefix', '')
+        
+        # Get the CSV file if provided
+        csv_file = None
+        if csv_file_id:
+            try:
+                csv_file = CsvFile.objects.get(id=csv_file_id, uploaded_by=request.user)
+            except CsvFile.DoesNotExist:
+                return Response({
+                    'error': 'CSV file not found'
+                }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if images are provided
+        if 'images' not in request.FILES:
+            return Response({
+                'error': 'No images provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        uploaded_images = []
+        for image_file in request.FILES.getlist('images'):
+            # Create a sample ID using prefix if provided
+            sample_id = f"{sample_id_prefix}_{len(uploaded_images) + 1}" if sample_id_prefix else None
+            
+            serializer = CropImageSerializer(data={
+                'sample_id': sample_id,
+                'csv_file': csv_file.id if csv_file else None
+            })
+            
+            if serializer.is_valid():
+                image_instance = serializer.save(uploaded_by=request.user, image=image_file)
+                uploaded_images.append(CropImageSerializer(image_instance).data)
+        
+        return Response({
+            'message': f'Successfully uploaded {len(uploaded_images)} images',
+            'images': uploaded_images
+        })
+    
+    @action(detail=True, methods=['post'])
+    def add_metadata(self, request, pk=None):
+        crop_image = self.get_object()
+        metadata = request.data.get('metadata', [])
+        
+        created_items = []
+        for meta_item in metadata:
+            if 'label' in meta_item and 'value' in meta_item:
+                meta = ImageMetadata.objects.create(
+                    image=crop_image,
+                    label=meta_item['label'],
+                    value=meta_item['value']
+                )
+                created_items.append(ImageMetadataSerializer(meta).data)
+        
+        return Response({
+            'message': f'Added {len(created_items)} metadata items',
+            'metadata': created_items
+        })
+        
+    @action(detail=False, methods=['get'])
+    def metadata_labels(self, request):
+        """Get all unique metadata labels for crop images"""
+        # Get unique labels from ImageMetadata for the current user's images
+        labels = ImageMetadata.objects.filter(
+            image__uploaded_by=request.user
+        ).values_list('label', flat=True).distinct()
+        
+        return Response({
+            'labels': list(labels)
+        })
+
+class CsvFileViewSet(viewsets.ModelViewSet):
+    queryset = CsvFile.objects.all().order_by('-uploaded_at')
+    serializer_class = CsvFileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def perform_create(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
+    
+    def get_queryset(self):
+        # Filter to only show files uploaded by the current user
+        return CsvFile.objects.filter(uploaded_by=self.request.user).order_by('-uploaded_at')
+    
+    @action(detail=True, methods=['get'])
+    def preview(self, request, pk=None):
+        csv_file = self.get_object()
+        
+        try:
+            file_path = csv_file.file.path
+            # Read the CSV file
+            df = pd.read_csv(file_path)
+            
+            # Convert to JSON for preview (first 5 rows)
+            preview_data = df.head(5).to_dict('records')
+            
+            return Response({
+                'preview': preview_data
+            })
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+    
+    @action(detail=True, methods=['post'])
+    def process(self, request, pk=None):
+        csv_file = self.get_object()
+        
+        try:
+            file_path = csv_file.file.path
+            # Read the CSV file
+            df = pd.read_csv(file_path)
+            
+            # Mark as processed
+            csv_file.processed = True
+            csv_file.save()
+            
+            return Response({
+                'message': 'CSV file processed successfully'
+            })
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)

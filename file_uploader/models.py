@@ -1,7 +1,7 @@
 from django.db import models
+from django.contrib.auth.models import User
 import uuid
 import os
-from django.contrib.auth.models import User
 
 def get_file_path(instance, filename):
     """Generate a unique file path for the uploaded file."""
@@ -10,21 +10,39 @@ def get_file_path(instance, filename):
     return os.path.join('excel_files', filename)
 
 class ExcelFile(models.Model):
-    """Model to store uploaded Excel files."""
     title = models.CharField(max_length=255)
     file = models.FileField(upload_to=get_file_path)
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='excel_files')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     processed = models.BooleanField(default=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='excel_files', null=True, blank=True)
     
     def __str__(self):
         return self.title
 
-class ProcessedData(models.Model):
-    """Model to store data extracted from Excel files."""
-    excel_file = models.ForeignKey(ExcelFile, on_delete=models.CASCADE, related_name='processed_data')
-    data_json = models.JSONField()  # Store the processed data as JSON
-    created_at = models.DateTimeField(auto_now_add=True)
+class CropImage(models.Model):
+    sample_id = models.CharField(max_length=255)
+    image = models.ImageField(upload_to='crop_images/')
+    description = models.TextField(blank=True, null=True)
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='crop_images')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
     
     def __str__(self):
-        return f"Data from {self.excel_file.title}"
+        return self.sample_id
+
+class ImageMetadata(models.Model):
+    image = models.ForeignKey(CropImage, on_delete=models.CASCADE, related_name='metadata')
+    label = models.CharField(max_length=100)
+    value = models.CharField(max_length=255)
+    
+    def __str__(self):
+        return f"{self.label}: {self.value}"
+
+class CsvFile(models.Model):
+    name = models.CharField(max_length=255)
+    file = models.FileField(upload_to='csv_files/')
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='csv_files')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    processed = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return self.name
