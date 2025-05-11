@@ -1,0 +1,15 @@
+{
+  "name": "postgres-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "plugin.name": "pgoutput",
+    "database.hostname": "192.168.1.68",
+    "database.port": "5432",
+    "database.user": "docker",
+    "database.password": "18246",
+    "database.dbname": "AquaGreen",
+    "database.server.name": "postgres",
+    "database.history.kafka.bootstrap.servers": "localhost:9092",
+    "database.history.kafka.topic": "schema-changes.customers"
+  }
+}
