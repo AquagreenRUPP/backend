@@ -18,6 +18,15 @@ class ExcelFile(models.Model):
     
     def __str__(self):
         return self.title
+    
+    @property
+    def file_size(self):
+        """Return the file size in bytes if available"""
+        if self.file and hasattr(self.file, 'size'):
+            return self.file.size
+        elif self.file and os.path.exists(self.file.path):
+            return os.path.getsize(self.file.path)
+        return 0
 
 class CropImage(models.Model):
     sample_id = models.CharField(max_length=255)

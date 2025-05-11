@@ -19,7 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from file_uploader.auth import RegisterView, CustomTokenObtainPairView, UserProfileView
 from rest_framework_simplejwt.views import TokenRefreshView
-from file_uploader.views import ExcelFileViewSet, CropImageViewSet, CsvFileViewSet
+from file_uploader.views import ExcelFileViewSet, CropImageViewSet, CsvFileViewSet, ProcessedDataView, ExcelFileDetailView, ProcessFileView
 from rest_framework.routers import DefaultRouter
 
 # Create a router for direct API access
@@ -35,6 +35,13 @@ urlpatterns = [
     path('api/file-uploader/', include('file_uploader.urls')),
     # Direct API endpoints without the file-uploader prefix
     path('api/', include(api_router.urls)),
+    
+    # Custom API endpoints
+    path('api/excel-files/<int:pk>/detail/', ExcelFileDetailView.as_view(), name='excel_file_detail'),
+    path('api/excel-files/<int:pk>/process/', ProcessFileView.as_view(), name='process_file'),
+    
+    # Processed data endpoint
+    path('api/processed-data/by_file/', ProcessedDataView.as_view(), name='processed_data_by_file'),
     
     # Authentication endpoints
     path('api/auth/register/', RegisterView.as_view(), name='register'),

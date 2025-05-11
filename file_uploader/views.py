@@ -11,6 +11,8 @@ import json
 import os
 from django.conf import settings
 from django.contrib.auth.models import User
+from rest_framework.views import APIView
+import numpy as np
 
 class ExcelFileViewSet(viewsets.ModelViewSet):
     queryset = ExcelFile.objects.all().order_by('-uploaded_at')
@@ -55,6 +57,60 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
             
             return Response({
                 'preview': preview_data
+            })
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class ExcelFileDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, pk):
+        try:
+            excel_file = get_object_or_404(ExcelFile, id=pk, uploaded_by=request.user)
+            
+            # Calculate the actual file size for accurate reporting
+            file_size = 0
+            if excel_file.file and hasattr(excel_file.file, 'path') and os.path.exists(excel_file.file.path):
+                file_size = os.path.getsize(excel_file.file.path)
+            
+            # Create the serializer with the file size in context
+            serializer = ExcelFileSerializer(
+                excel_file, 
+                context={
+                    'request': request,
+                    'file_size': file_size
+                }
+            )
+            
+            return Response(serializer.data)
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class ProcessFileView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, pk):
+        try:
+            excel_file = get_object_or_404(ExcelFile, id=pk, uploaded_by=request.user)
+            
+            # Process the file here (e.g., run calculations, data transformation, etc.)
+            # For now, just mark as processed
+            excel_file.processed = True
+            excel_file.save()
+            
+            # Update the file size information for accurate reporting
+            file_size = 0
+            if excel_file.file and os.path.exists(excel_file.file.path):
+                file_size = os.path.getsize(excel_file.file.path)
+            
+            return Response({
+                'message': 'File processed successfully',
+                'file_id': excel_file.id,
+                'file_size_in_bytes': file_size
             })
         except Exception as e:
             return Response({
@@ -209,3 +265,55 @@ class CsvFileViewSet(viewsets.ModelViewSet):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+class ProcessedDataView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        file_id = request.query_params.get('file_id')
+        if not file_id:
+            return Response({"error": "Missing file_id parameter"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get the file, ensuring it belongs to the current user
+            excel_file = get_object_or_404(ExcelFile, id=file_id, uploaded_by=request.user)
+            
+            if not excel_file.processed:
+                return Response([])
+            
+            file_path = excel_file.file.path
+            try:
+                # Check if file exists and is not empty
+                import os
+                if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                    return Response({"error": "File is empty or invalid"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Read the Excel file
+                df = pd.read_excel(file_path)
+                
+                # Check if dataframe is empty or has only 1 row/column
+                if df.empty:
+                    return Response({"error": "File contains no data"}, status=status.HTTP_400_BAD_REQUEST)
+                elif len(df) <= 1:
+                    return Response({"error": "File contains only one row of data, which is insufficient for analysis"}, status=status.HTTP_400_BAD_REQUEST)
+                elif len(df.columns) <= 1:
+                    return Response({"error": "File contains only one column of data, which is insufficient for analysis"}, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Handle NaN values correctly - replace with None for JSON serialization
+                processed_data = df.replace({np.nan: None}).to_dict('records')
+                
+                # Additional safety check for any remaining problematic values
+                for record in processed_data:
+                    for key, value in record.items():
+                        # Check for NaN, infinity values and replace with None
+                        if isinstance(value, float) and (pd.isna(value) or np.isinf(value)):
+                            record[key] = None
+                
+                return Response(processed_data)
+            except Exception as e:
+                return Response({"error": f"Error processing file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
+                
+        except ExcelFile.DoesNotExist:
+            return Response({"error": "File not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
