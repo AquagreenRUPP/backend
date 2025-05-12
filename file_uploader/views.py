@@ -281,6 +281,14 @@ class ProcessedDataView(APIView):
             if not excel_file.processed:
                 return Response([])
             
+            # Check if we have cached processed data in the session to avoid reprocessing
+            cache_key = f'processed_data_{file_id}'
+            processed_data = request.session.get(cache_key)
+            
+            if processed_data:
+                # Use cached data if available
+                return Response(processed_data)
+            
             file_path = excel_file.file.path
             try:
                 # Check if file exists and is not empty
@@ -288,8 +296,19 @@ class ProcessedDataView(APIView):
                 if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
                     return Response({"error": "File is empty or invalid"}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Read the Excel file
-                df = pd.read_excel(file_path)
+                # Read the Excel file with more efficient pandas settings
+                # Use chunksize for larger files to prevent memory issues
+                file_size = os.path.getsize(file_path)
+                if file_size > 10 * 1024 * 1024:  # If file is larger than 10MB
+                    # Process in chunks for large files
+                    chunks = pd.read_excel(file_path, chunksize=1000)
+                    all_data = []
+                    for chunk in chunks:
+                        all_data.append(chunk)
+                    df = pd.concat(all_data)
+                else:
+                    # For smaller files, read normally
+                    df = pd.read_excel(file_path, engine='openpyxl')
                 
                 # Check if dataframe is empty or has only 1 row/column
                 if df.empty:
@@ -299,6 +318,10 @@ class ProcessedDataView(APIView):
                 elif len(df.columns) <= 1:
                     return Response({"error": "File contains only one column of data, which is insufficient for analysis"}, status=status.HTTP_400_BAD_REQUEST)
                 
+                # Only process first 1000 rows for performance if data is very large
+                if len(df) > 1000:
+                    df = df.head(1000)
+                    
                 # Handle NaN values correctly - replace with None for JSON serialization
                 processed_data = df.replace({np.nan: None}).to_dict('records')
                 
@@ -308,8 +331,18 @@ class ProcessedDataView(APIView):
                         # Check for NaN, infinity values and replace with None
                         if isinstance(value, float) and (pd.isna(value) or np.isinf(value)):
                             record[key] = None
+                        # Convert any problematic types to strings
+                        elif not isinstance(value, (str, int, float, bool, type(None))):
+                            record[key] = str(value)
+                
+                # Cache the processed data in the session to avoid reprocessing
+                request.session[cache_key] = processed_data
                 
                 return Response(processed_data)
+            except pd.errors.EmptyDataError:
+                return Response({"error": "The file is empty or contains no data"}, status=status.HTTP_400_BAD_REQUEST)
+            except pd.errors.ParserError:
+                return Response({"error": "Error parsing the Excel file. It may be corrupted or in an unsupported format."}, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 return Response({"error": f"Error processing file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
                 
