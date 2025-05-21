@@ -254,12 +254,63 @@ class CsvFileViewSet(viewsets.ModelViewSet):
             # Read the CSV file
             df = pd.read_csv(file_path)
             
+            # Process each row to link with crop images by sample_id
+            created = 0
+            updated = 0
+
+            # Ensure sample_id column exists
+            if 'sample_id' in df.columns:
+                # Find crop images with matching sample_ids
+                for _, row in df.iterrows():
+                    sample_id = row['sample_id']
+                    if not sample_id:
+                        continue
+                    
+                    # Look for matching crop images
+                    matching_images = CropImage.objects.filter(
+                        sample_id=sample_id,
+                        uploaded_by=request.user
+                    )
+                    
+                    # Link found images to this CSV file
+                    for image in matching_images:
+                        if image.csv_file != csv_file:
+                            image.csv_file = csv_file
+                            image.save()
+                            updated += 1
+                    
+                    # Create metadata for the matching images
+                    for image in matching_images:
+                        # Add each column as metadata
+                        for column in df.columns:
+                            if column != 'sample_id' and not pd.isna(row[column]):
+                                # Check if this metadata already exists
+                                existing_meta = ImageMetadata.objects.filter(
+                                    image=image,
+                                    label=column
+                                ).first()
+                                
+                                if existing_meta:
+                                    # Update existing metadata
+                                    existing_meta.value = str(row[column])
+                                    existing_meta.save()
+                                else:
+                                    # Create new metadata
+                                    ImageMetadata.objects.create(
+                                        image=image,
+                                        label=column,
+                                        value=str(row[column])
+                                    )
+                                    created += 1
+            
             # Mark as processed
             csv_file.processed = True
             csv_file.save()
             
             return Response({
-                'message': 'CSV file processed successfully'
+                'message': 'CSV file processed successfully',
+                'created': created,
+                'updated': updated
             })
         except Exception as e:
             return Response({
