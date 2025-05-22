@@ -112,26 +112,17 @@ WSGI_APPLICATION = 'data_processor.wsgi.application'
 
 
 # Database
-if os.getenv('DB_ENGINE') == 'django.db.backends.postgresql':
-    # PostgreSQL configuration
-    DATABASES = {
-        'default': {
-            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-            'NAME': os.getenv('DB_NAME', 'data_processor_db'),
-            'USER': os.getenv('DB_USER', 'postgres'),
-            'PASSWORD': os.getenv('DB_PASSWORD', ''),
-            'HOST': os.getenv('DB_HOST', 'localhost'),
-            'PORT': os.getenv('DB_PORT', '5432'),
-        }
+# Always use PostgreSQL for production configuration
+DATABASES = {
+    'default': {
+        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+        'NAME': os.getenv('DB_NAME', 'aquagreen_db'),
+        'USER': os.getenv('DB_USER', 'aquagreen_user'),
+        'PASSWORD': os.getenv('DB_PASSWORD', 'your_secure_password'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5433'),
     }
-else:
-    # SQLite configuration
-    DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-        }
-    }
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
