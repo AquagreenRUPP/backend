@@ -48,6 +48,10 @@ urlpatterns = [
     path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='login'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/auth/profile/', UserProfileView.as_view(), name='user_profile'),
+    
+    # Password reset endpoints
+    path('api/auth/password-reset/', include("file_uploader.password_reset_urls")),
+    path('api/auth/otp/', include('file_uploader.otp_urls')),
 ]
 
 # Serve media files in development

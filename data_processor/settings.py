@@ -157,8 +157,18 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# Email settings for password reset
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'  # For development
+# Templates configuration
+TEMPLATES[0]['DIRS'] = [os.path.join(BASE_DIR, 'templates')]
+
+# Email settings for Gmail SMTP
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+DEFAULT_FROM_EMAIL = 'chansovanmonyyoeun03@gmail.com'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'aquagreenniee@gmail.com')
+# Note: Do not hardcode passwords in code - use environment variables
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
 
 # Kafka settings
 KAFKA_ENABLED = os.getenv('KAFKA_ENABLED', 'False').lower() == 'true'
