@@ -1,0 +1,2 @@
+sample_id,description,crop_type,plant_age_days,health_status,growth_stage,soil_type,temperature_c,humidity_pct,last_watering
+CROP_1,Tomato seedling with healthy leaves,Tomato,14,Healthy,Vegetative,Loam,25.4,65,10/05/2025

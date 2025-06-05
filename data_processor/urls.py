@@ -20,6 +20,7 @@ from django.conf.urls.static import static
 from file_uploader.auth import RegisterView, CustomTokenObtainPairView, UserProfileView
 from rest_framework_simplejwt.views import TokenRefreshView
 from file_uploader.views import ExcelFileViewSet, CropImageViewSet, CsvFileViewSet, ProcessedDataView, ExcelFileDetailView, ProcessFileView
+from file_uploader.dashboard_views import DashboardDataView
 from rest_framework.routers import DefaultRouter
 
 # Create a router for direct API access
@@ -43,6 +44,9 @@ urlpatterns = [
     # Processed data endpoint
     path('api/processed-data/by_file/', ProcessedDataView.as_view(), name='processed_data_by_file'),
     
+    # Dashboard data endpoint
+    path('api/dashboard/', DashboardDataView.as_view(), name='dashboard_data'),
+    
     # Authentication endpoints
     path('api/auth/register/', RegisterView.as_view(), name='register'),
     path('api/auth/login/', CustomTokenObtainPairView.as_view(), name='login'),
@@ -51,6 +55,7 @@ urlpatterns = [
     
     # Password reset endpoints
     path('api/auth/password-reset/', include("file_uploader.password_reset_urls")),
+    path('api/auth/password-reset-otp/', include("file_uploader.password_reset_otp_urls")),
     path('api/auth/otp/', include('file_uploader.otp_urls')),
 ]
 

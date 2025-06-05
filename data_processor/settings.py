@@ -26,7 +26,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-a2vgovvi%x@fbbvf13=#ycw!zpzaz+%cwjnh*^euhn=qby^-$k')
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    # Generate a random secret key if not provided in .env
+    import secrets
+    SECRET_KEY = secrets.token_urlsafe(50)
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
@@ -112,17 +116,25 @@ WSGI_APPLICATION = 'data_processor.wsgi.application'
 
 
 # Database
-# Always use PostgreSQL for production configuration
+# SQLite configuration
 DATABASES = {
     'default': {
-        'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
-        'NAME': os.getenv('DB_NAME', 'aquagreen_db'),
-        'USER': os.getenv('DB_USER', 'aquagreen_user'),
-        'PASSWORD': os.getenv('DB_PASSWORD', 'your_secure_password'),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5433'),
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# PostgreSQL configuration (commented out due to authentication issues)
+# DATABASES = {
+#     'default': {
+#         'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+#         'NAME': os.getenv('DB_NAME', 'AquaGreen'),
+#         'USER': os.getenv('DB_USER', 'postgres'),
+#         'PASSWORD': os.getenv('DB_PASSWORD', '18246F'),
+#         'HOST': os.getenv('DB_HOST', 'localhost'),
+#         'PORT': os.getenv('DB_PORT', '5432'),
+#     }
+# }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -162,13 +174,13 @@ TEMPLATES[0]['DIRS'] = [os.path.join(BASE_DIR, 'templates')]
 
 # Email settings for Gmail SMTP
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-DEFAULT_FROM_EMAIL = 'chansovanmonyyoeun03@gmail.com'
+DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER', 'chansovanmonyyoeun03@gmail.com')
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'aquagreenniee@gmail.com')
-# Note: Do not hardcode passwords in code - use environment variables
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'chansovanmonyyoeun03@gmail.com')
+# Note: Password from .env file
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'geqb vfut lbgg nvfr')
 
 # Kafka settings
 KAFKA_ENABLED = os.getenv('KAFKA_ENABLED', 'False').lower() == 'true'
