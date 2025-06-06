@@ -33,11 +33,12 @@ class CropImageSerializer(serializers.ModelSerializer):
 
 class CsvFileSerializer(serializers.ModelSerializer):
     crop_images_count = serializers.SerializerMethodField()
+    metadata = CropMetadataSerializer(many=True, read_only=True)
     user_details = UserSerializer(source='user', read_only=True)
     
     class Meta:
         model = CsvFile
-        fields = ['id', 'title', 'file', 'uploaded_at', 'user', 'user_details', 'crop_images_count']
+        fields = ['id', 'title', 'file', 'uploaded_at', 'user', 'user_details', 'crop_images_count', 'metadata']
         extra_kwargs = {
             'user': {'write_only': True}
         }
