@@ -19,7 +19,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from file_uploader.auth import RegisterView, CustomTokenObtainPairView, UserProfileView
 from rest_framework_simplejwt.views import TokenRefreshView
-from file_uploader.views import ExcelFileViewSet, CropImageViewSet, CsvFileViewSet, ProcessedDataView, ExcelFileDetailView, ProcessFileView
+from file_uploader.views import ExcelFileViewSet, CropImageViewSet, CsvFileViewSet, ProcessedDataView, ExcelFileDetailView, ProcessFileView, CsvDataView
 from file_uploader.dashboard_views import DashboardDataView
 from rest_framework.routers import DefaultRouter
 
@@ -41,8 +41,9 @@ urlpatterns = [
     path('api/excel-files/<int:pk>/detail/', ExcelFileDetailView.as_view(), name='excel_file_detail'),
     path('api/excel-files/<int:pk>/process/', ProcessFileView.as_view(), name='process_file'),
     
-    # Processed data endpoint
+    # Processed data endpoints
     path('api/processed-data/by_file/', ProcessedDataView.as_view(), name='processed_data_by_file'),
+    path('api/csv-data/', CsvDataView.as_view(), name='csv_data'),
     
     # Dashboard data endpoint
     path('api/dashboard/', DashboardDataView.as_view(), name='dashboard_data'),
