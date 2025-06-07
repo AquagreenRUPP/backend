@@ -56,8 +56,6 @@ urlpatterns = [
     
     # Password reset endpoints
     path('api/auth/password-reset/', include("file_uploader.password_reset_urls")),
-    path('api/auth/password-reset-otp/', include("file_uploader.password_reset_otp_urls")),
-    path('api/auth/otp/', include('file_uploader.otp_urls')),
 ]
 
 # Serve media files in development

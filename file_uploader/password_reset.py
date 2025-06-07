@@ -75,11 +75,21 @@ class PasswordResetConfirmView(APIView):
     def post(self, request):
         uid = request.data.get('uid')
         token = request.data.get('token')
+        email = request.data.get('email')
         new_password = request.data.get('new_password')
         
-        if not uid or not token or not new_password:
+        # Check if this is a direct reset with email or token-based reset
+        is_direct_reset = email is not None
+        
+        if not new_password:
             return Response(
-                {"error": "UID, token, and new password are required"},
+                {"error": "New password is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not is_direct_reset and (not uid or not token):
+            return Response(
+                {"error": "UID and token are required for token-based reset"},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -93,27 +103,54 @@ class PasswordResetConfirmView(APIView):
             )
         
         try:
-            # Decode the user ID
-            user_id = force_str(urlsafe_base64_decode(uid))
-            user = User.objects.get(pk=user_id)
-            
-            # Check if token is valid
-            if not default_token_generator.check_token(user, token):
+            if is_direct_reset:
+                # Direct reset with email
+                try:
+                    user = User.objects.get(email=email)
+                except User.DoesNotExist:
+                    # Don't reveal that the user doesn't exist for security reasons
+                    return Response(
+                        {"success": "Password has been reset successfully"},
+                        status=status.HTTP_200_OK
+                    )
+                
+                # Set new password
+                user.set_password(new_password)
+                user.save()
+                
                 return Response(
-                    {"error": "Invalid or expired token"},
-                    status=status.HTTP_400_BAD_REQUEST
+                    {"success": "Password has been reset successfully"},
+                    status=status.HTTP_200_OK
                 )
-            
-            # Set new password
-            user.set_password(new_password)
-            user.save()
-            
+            else:
+                # Token-based reset
+                try:
+                    # Decode the user ID
+                    user_id = force_str(urlsafe_base64_decode(uid))
+                    user = User.objects.get(pk=user_id)
+                    
+                    # Check if token is valid
+                    if not default_token_generator.check_token(user, token):
+                        return Response(
+                            {"error": "Invalid or expired token"},
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    
+                    # Set new password
+                    user.set_password(new_password)
+                    user.save()
+                    
+                    return Response(
+                        {"success": "Password has been reset successfully"},
+                        status=status.HTTP_200_OK
+                    )
+                except (TypeError, ValueError, User.DoesNotExist):
+                    return Response(
+                        {"error": "Invalid reset link"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+        except Exception as e:
             return Response(
-                {"success": "Password has been reset successfully"},
-                status=status.HTTP_200_OK
-            )
-        except (TypeError, ValueError, User.DoesNotExist):
-            return Response(
-                {"error": "Invalid reset link"},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": f"An error occurred: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
