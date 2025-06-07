@@ -34,6 +34,8 @@ class CsvFile(models.Model):
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='csv_files')
     uploaded_at = models.DateTimeField(auto_now_add=True)
     processed = models.BooleanField(default=False)
+    columns = models.JSONField(default=list, blank=True)  # Store column names
+    data_hash = models.CharField(max_length=64, blank=True, null=True)  # For detecting file changes
     
     def __str__(self):
         return self.name
