@@ -27,7 +27,7 @@ class CsvFile(models.Model):
 
 class CropImage(models.Model):
     """Model to store uploaded crop images."""
-    image = models.ImageField(upload_to=get_crop_image_path)
+    image = models.ImageField(upload_to=get_crop_image_path, null=True, blank=True)
     description = models.TextField(blank=True, null=True)
     sample_id = models.CharField(max_length=50)
     csv_file = models.ForeignKey(CsvFile, on_delete=models.CASCADE, related_name='crop_images')
