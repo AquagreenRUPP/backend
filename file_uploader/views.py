@@ -52,8 +52,13 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
         
         try:
             file_path = excel_file.file.path
-            # Read the Excel file
-            df = pd.read_excel(file_path)
+            file_ext = os.path.splitext(file_path)[1].lower()
+            
+            # Read the file based on its extension
+            if file_ext == '.csv':
+                df = pd.read_csv(file_path)
+            else:  # Default to Excel for .xlsx, .xls
+                df = pd.read_excel(file_path)
             
             # Convert to JSON for preview (first 5 rows)
             preview_data = df.head(5).to_dict('records')
@@ -100,21 +105,86 @@ class ProcessFileView(APIView):
         try:
             excel_file = get_object_or_404(ExcelFile, id=pk, uploaded_by=request.user)
             
-            # Process the file here (e.g., run calculations, data transformation, etc.)
-            # For now, just mark as processed
-            excel_file.processed = True
-            excel_file.save()
+            # Check if file exists and get its path
+            if not excel_file.file or not os.path.exists(excel_file.file.path):
+                return Response({
+                    'error': 'File not found or is invalid'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
+            file_path = excel_file.file.path
+            file_ext = os.path.splitext(file_path)[1].lower()
             
-            # Update the file size information for accurate reporting
-            file_size = 0
-            if excel_file.file and os.path.exists(excel_file.file.path):
-                file_size = os.path.getsize(excel_file.file.path)
-            
-            return Response({
-                'message': 'File processed successfully',
-                'file_id': excel_file.id,
-                'file_size_in_bytes': file_size
-            })
+            # Process based on file type, but try multiple approaches regardless of extension
+            try:
+                # First, try to detect if it's a CSV file by checking content
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        sample = f.read(1024)  # Read a sample of the file
+                        # If file has commas and newlines, it's likely a CSV
+                        if ',' in sample and '\n' in sample:
+                            df = pd.read_csv(file_path)
+                            print(f"Successfully read as CSV: {file_path}")
+                            return_early = True
+                        else:
+                            return_early = False
+                except UnicodeDecodeError:
+                    # If we can't read it as text, it's probably not a CSV
+                    return_early = False
+                
+                if not return_early:
+                    # Try different Excel engines
+                    excel_engines = ['openpyxl', 'xlrd', None]  # None means pandas chooses
+                    last_error = None
+                    
+                    for engine in excel_engines:
+                        try:
+                            engine_arg = {} if engine is None else {'engine': engine}
+                            df = pd.read_excel(file_path, **engine_arg)
+                            print(f"Successfully read with engine: {engine if engine else 'default'}")
+                            break
+                        except Exception as e:
+                            last_error = e
+                            continue
+                    else:  # This executes if the for loop completes without a break
+                        # All engines failed, try CSV as last resort
+                        try:
+                            df = pd.read_csv(file_path)
+                            print(f"Fell back to CSV reader: {file_path}")
+                        except Exception:
+                            # If that also fails, raise the last Excel error
+                            raise last_error
+                    
+                # Basic validation of the dataframe
+                if df.empty:
+                    return Response({
+                        'error': 'File contains no data'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                    
+                # Mark as processed
+                excel_file.processed = True
+                excel_file.save()
+                
+                # Update the file size information for accurate reporting
+                file_size = os.path.getsize(file_path)
+                
+                return Response({
+                    'message': 'File processed successfully',
+                    'file_id': excel_file.id,
+                    'file_size_in_bytes': file_size
+                })
+            except pd.errors.EmptyDataError:
+                return Response({
+                    'error': 'The file is empty or contains no data'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            except pd.errors.ParserError:
+                return Response({
+                    'error': 'Error parsing the file. It may be corrupted or in an unsupported format.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({
+                    'error': f'Error processing file: {str(e)}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+                
         except Exception as e:
             return Response({
                 'error': str(e)
@@ -499,19 +569,34 @@ class ProcessedDataView(APIView):
                 if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
                     return Response({"error": "File is empty or invalid"}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Read the Excel file with more efficient pandas settings
-                # Use chunksize for larger files to prevent memory issues
+                # Determine file type by extension
+                file_ext = os.path.splitext(file_path)[1].lower()
                 file_size = os.path.getsize(file_path)
-                if file_size > 10 * 1024 * 1024:  # If file is larger than 10MB
-                    # Process in chunks for large files
-                    chunks = pd.read_excel(file_path, chunksize=1000)
-                    all_data = []
-                    for chunk in chunks:
-                        all_data.append(chunk)
-                    df = pd.concat(all_data)
+                
+                if file_ext == '.csv':
+                    # Process CSV file
+                    if file_size > 10 * 1024 * 1024:  # If file is larger than 10MB
+                        # Process in chunks for large files
+                        chunks = pd.read_csv(file_path, chunksize=1000)
+                        all_data = []
+                        for chunk in chunks:
+                            all_data.append(chunk)
+                        df = pd.concat(all_data)
+                    else:
+                        # For smaller files, read normally
+                        df = pd.read_csv(file_path)
                 else:
-                    # For smaller files, read normally
-                    df = pd.read_excel(file_path, engine='openpyxl')
+                    # Process Excel file
+                    if file_size > 10 * 1024 * 1024:  # If file is larger than 10MB
+                        # Process in chunks for large files
+                        chunks = pd.read_excel(file_path, chunksize=1000)
+                        all_data = []
+                        for chunk in chunks:
+                            all_data.append(chunk)
+                        df = pd.concat(all_data)
+                    else:
+                        # For smaller files, read normally
+                        df = pd.read_excel(file_path, engine='openpyxl')
                 
                 # Check if dataframe is empty or has only 1 row/column
                 if df.empty:
