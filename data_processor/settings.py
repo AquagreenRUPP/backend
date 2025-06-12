@@ -50,7 +50,6 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework_simplejwt',
     'file_uploader',
-    'kafka_producer',
 ]
 
 MIDDLEWARE = [
@@ -181,11 +180,6 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'chansovanmonyyoeun03@gmail.com')
 # Note: Password from .env file
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'geqb vfut lbgg nvfr')
-
-# Kafka settings
-KAFKA_ENABLED = os.getenv('KAFKA_ENABLED', 'False').lower() == 'true'
-KAFKA_BOOTSTRAP_SERVERS = os.getenv('KAFKA_BOOTSTRAP_SERVERS', 'localhost:9092')
-KAFKA_TOPIC = os.getenv('KAFKA_TOPIC', 'excel_data')
 
 # Security settings
 if not DEBUG:
