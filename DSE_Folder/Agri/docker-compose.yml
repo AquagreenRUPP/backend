@@ -1,0 +1,115 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: agri_postgres
+    environment:
+      POSTGRES_DB: agri_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - agri_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agri_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Django Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: agri_backend:latest
+    container_name: agri_backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/media:/app/media
+      - ./backend/staticfiles:/app/staticfiles
+    environment:
+      - DEBUG=False
+      - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
+      - DB_ENGINE=django.db.backends.postgresql
+      - DB_NAME=agri_db
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-postgres123}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend,${DOMAIN_NAME:-your-domain.com}
+      - CSRF_TRUSTED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080,http://${DOMAIN_NAME:-your-domain.com}
+    networks:
+      - agri_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/admin/', timeout=10)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Vue.js Frontend
+  frontend:
+    build:
+      context: ./AquaGreen_Monitoring/frontend
+      dockerfile: Dockerfile
+    image: agri_frontend:latest
+    container_name: agri_frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    environment:
+      - VUE_APP_API_URL=http://backend:8000
+    networks:
+      - agri_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/", "||", "exit", "1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  # Nginx Reverse Proxy (Production)
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: agri_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./ssl:/etc/nginx/ssl
+      - ./backend/staticfiles:/var/www/static
+      - ./backend/media:/var/www/media
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - agri_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  agri_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local 
