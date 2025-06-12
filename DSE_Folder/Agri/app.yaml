@@ -1,0 +1,33 @@
+runtime: python310
+
+env_variables:
+  SECRET_KEY: "django-insecure-CHANGE-THIS-IN-PRODUCTION-aquagreen-462615-key"
+  DEBUG: "False"
+  DJANGO_SETTINGS_MODULE: "data_processor.settings_appengine"
+  # DATABASE_URL: "postgres://username:password@/db_name?host=/cloudsql/project:region:instance"
+  GOOGLE_CLOUD_PROJECT: "aquagreen-462615"
+  # USE_CLOUD_SQL_AUTH_PROXY: "true"
+  KAFKA_ENABLED: "False"  # Disable for App Engine, use Cloud Pub/Sub instead
+
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6
+
+handlers:
+- url: /static
+  static_dir: backend/static/
+  secure: always
+
+- url: /media
+  static_dir: backend/media/
+  secure: always
+
+- url: /.*
+  script: auto
+  secure: always
+
+# beta_settings:
+  # cloud_sql_instances: aquagreen-462615:us-central1:your-instance-name
+
+ 

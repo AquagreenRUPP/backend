@@ -1,0 +1,41 @@
+steps:
+  # Build frontend
+  - name: 'node:18'
+    dir: 'AquaGreen_Monitoring/frontend'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        npm ci
+        npm run build
+        
+  # Copy frontend build to backend static
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['cp', '-r', 'AquaGreen_Monitoring/frontend/dist/*', 'AquaGreen_Monitoring/backend/static/']
+    
+  # Install Python dependencies and collect static files
+  - name: 'python:3.10'
+    dir: 'AquaGreen_Monitoring'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        pip install -r requirements.txt
+        cd backend
+        python manage.py collectstatic --noinput --settings=data_processor.settings_production
+        
+  # Deploy to App Engine
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: ['app', 'deploy', 'app.yaml', '--quiet']
+    
+  # Deploy frontend to Cloud Storage (optional - for serving via CDN)
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['rsync', '-r', '-c', '-d', 'AquaGreen_Monitoring/frontend/dist/', 'gs://${_FRONTEND_BUCKET}/']
+    
+substitutions:
+  _FRONTEND_BUCKET: 'your-frontend-bucket-name'
+  
+options:
+  logging: CLOUD_LOGGING_ONLY
+  
+timeout: '1200s' 

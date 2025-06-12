@@ -1,0 +1,32 @@
+# Web Framework
+Django>=4.2,<5.0
+djangorestframework==3.15.2
+
+# Authentication
+djangorestframework-simplejwt==5.3.1
+
+# File Processing
+pandas>=2.0,<3.0
+openpyxl==3.1.5
+xlrd==2.0.1
+
+# CORS and Security
+django-cors-headers==4.3.1
+
+# Environment Management
+python-dotenv==1.0.1
+
+# Production Server
+gunicorn==21.2.0
+whitenoise==6.6.0
+
+# Google Cloud
+google-cloud-storage>=2.10.0
+google-cloud-secret-manager>=2.16.0
+
+# Monitoring and Logging
+google-cloud-logging>=3.5.0
+google-cloud-error-reporting>=1.9.0
+
+# API Documentation
+drf-spectacular==0.27.0 
