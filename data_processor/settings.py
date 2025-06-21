@@ -121,16 +121,14 @@ WSGI_APPLICATION = 'data_processor.wsgi.application'
 
 
 # Database
-# Check if DATABASE_URL is provided (by Render)
-import dj_database_url
-
+# Always use SQLite regardless of environment
 DATABASES = {
-    'default': dj_database_url.config(
-        default='sqlite:///' + str(BASE_DIR / 'db.sqlite3'),
-        conn_max_age=600,
-        ssl_require=not DEBUG,
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
 }
+
 
 # PostgreSQL configuration (commented out due to authentication issues)
 # DATABASES = {
