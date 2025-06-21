@@ -1,18 +1,39 @@
-Django>=5.0.0
+# Django and REST framework
+Django>=4.2.0,<6.0.0
 djangorestframework>=3.14.0
-pandas>=2.1.0
-numpy>=1.26.0
-kafka-python>=2.0.2
-gunicorn>=21.2.0
-python-dotenv>=1.0.0
-openpyxl>=3.1.2
+djangorestframework-simplejwt>=5.2.0
+django-cors-headers>=4.0.0
+django-filter>=23.0
+
+# Database
+psycopg2-binary>=2.9.6
+dj-database-url>=1.0.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.22.0
+openpyxl>=3.1.0
 xlrd>=2.0.1
-djangorestframework-simplejwt>=5.3.0
-django-cors-headers>=4.3.0
-psycopg2-binary>=2.9.9
-whitenoise>=6.5.0
-dj-database-url>=2.1.0
-pillow
-requests>=2.31.0
-setuptools>=69.0.0
-wheel>=0.42.0
+
+# Messaging and events
+kafka-python>=2.0.2
+
+# Security and auth
+cryptography>=39.0.0
+pyjwt>=2.6.0
+
+# File handling
+pillow>=9.5.0
+python-magic>=0.4.27
+
+# Server and deployment
+gunicorn>=20.1.0
+whitenoise>=6.3.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.28.0
+setuptools>=65.0.0
+wheel>=0.40.0
+uuid>=1.30
+pytz>=2023.0
