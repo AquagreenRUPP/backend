@@ -68,7 +68,9 @@ MIDDLEWARE = [
 CORS_ALLOWED_ORIGINS = [
     'http://127.0.0.1:8080',
     'http://localhost:8080',
-    'https://*.vercel.app',  # Your Vercel frontend domain
+    'http://localhost:8081',
+    'https://*.vercel.app',  # Any Vercel subdomain
+    'https://aquagreen-monitoring.vercel.app',  # Your specific Vercel domain
 ]
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = os.getenv('CORS_ALLOW_ALL_ORIGINS', 'True').lower() == 'true'  # Only in development
