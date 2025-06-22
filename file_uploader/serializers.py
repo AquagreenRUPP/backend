@@ -51,11 +51,9 @@ class ExcelFileSerializer(serializers.ModelSerializer):
         return None
         
     def get_file_size_in_bytes(self, obj):
-        # First check if file size is in context (from detail view)
         if 'file_size' in self.context:
             return self.context['file_size']
         
-        # Otherwise, get the actual file size from the file system
         if obj.file and hasattr(obj.file, 'path') and os.path.exists(obj.file.path):
             return os.path.getsize(obj.file.path)
         return 0

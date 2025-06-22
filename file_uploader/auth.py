@@ -18,14 +18,12 @@ class RegisterView(APIView):
             email = request.data.get('email')
             password = request.data.get('password')
             
-            # Validate required fields
             if not username or not email or not password:
                 return Response(
                     {"errors": "Username, email, and password are required"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Check duplicates
             if User.objects.filter(username=username).exists():
                 return Response(
                     {"errors": "User with this username already exists"},
@@ -37,7 +35,6 @@ class RegisterView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Password strength
             try:
                 validate_password(password)
             except ValidationError as e:
@@ -46,14 +43,12 @@ class RegisterView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Create active user (no OTP required)
             user = User.objects.create_user(
                 username=username,
                 email=email,
                 password=password,
             )
             
-            # Issue JWT tokens
             refresh = RefreshToken.for_user(user)
             return Response({
                 "success": True,
@@ -70,10 +65,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         response = super().post(request, *args, **kwargs)
         
         if response.status_code == 200:
-            # Get the user object
             user = User.objects.get(username=request.data.get('username'))
             
-            # Add user data to response
             response.data['user'] = UserSerializer(user).data
             response.data['success'] = True
         

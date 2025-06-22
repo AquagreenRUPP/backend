@@ -26,7 +26,7 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
         serializer.save(uploaded_by=self.request.user)
     
     def get_queryset(self):
-        # Filter to only show files uploaded by the current user
+
         return ExcelFile.objects.filter(uploaded_by=self.request.user).order_by('-uploaded_at')
     
     @action(detail=True, methods=['post'])
@@ -34,7 +34,7 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
         excel_file = self.get_object()
         
         try:
-            # Process the file
+    
             processed_data = process_excel_file(excel_file)
             
             return Response({
@@ -54,13 +54,12 @@ class ExcelFileViewSet(viewsets.ModelViewSet):
             file_path = excel_file.file.path
             file_ext = os.path.splitext(file_path)[1].lower()
             
-            # Read the file based on its extension
             if file_ext == '.csv':
                 df = pd.read_csv(file_path)
-            else:  # Default to Excel for .xlsx, .xls
+            else:
                 df = pd.read_excel(file_path)
             
-            # Convert to JSON for preview (first 5 rows)
+
             preview_data = df.head(5).to_dict('records')
             
             return Response({
@@ -78,12 +77,12 @@ class ExcelFileDetailView(APIView):
         try:
             excel_file = get_object_or_404(ExcelFile, id=pk, uploaded_by=request.user)
             
-            # Calculate the actual file size for accurate reporting
+
             file_size = 0
             if excel_file.file and hasattr(excel_file.file, 'path') and os.path.exists(excel_file.file.path):
                 file_size = os.path.getsize(excel_file.file.path)
             
-            # Create the serializer with the file size in context
+
             serializer = ExcelFileSerializer(
                 excel_file, 
                 context={
@@ -105,7 +104,7 @@ class ProcessFileView(APIView):
         try:
             excel_file = get_object_or_404(ExcelFile, id=pk, uploaded_by=request.user)
             
-            # Check if file exists and get its path
+
             if not excel_file.file or not os.path.exists(excel_file.file.path):
                 return Response({
                     'error': 'File not found or is invalid'
@@ -114,13 +113,13 @@ class ProcessFileView(APIView):
             file_path = excel_file.file.path
             file_ext = os.path.splitext(file_path)[1].lower()
             
-            # Process based on file type, but try multiple approaches regardless of extension
+
             try:
-                # First, try to detect if it's a CSV file by checking content
+
                 try:
                     with open(file_path, 'r', encoding='utf-8') as f:
-                        sample = f.read(1024)  # Read a sample of the file
-                        # If file has commas and newlines, it's likely a CSV
+                        sample = f.read(1024)
+
                         if ',' in sample and '\n' in sample:
                             df = pd.read_csv(file_path)
                             print(f"Successfully read as CSV: {file_path}")
@@ -128,43 +127,41 @@ class ProcessFileView(APIView):
                         else:
                             return_early = False
                 except UnicodeDecodeError:
-                    # If we can't read it as text, it's probably not a CSV
+
                     return_early = False
                 
                 if not return_early:
-                    # Try different Excel engines
-                    excel_engines = ['openpyxl', 'xlrd', None]  # None means pandas chooses
+
+                    excel_engines = ['openpyxl', 'xlrd', None]  
                     last_error = None
                     
                     for engine in excel_engines:
                         try:
                             engine_arg = {} if engine is None else {'engine': engine}
                             df = pd.read_excel(file_path, **engine_arg)
-                            print(f"Successfully read with engine: {engine if engine else 'default'}")
                             break
                         except Exception as e:
                             last_error = e
                             continue
-                    else:  # This executes if the for loop completes without a break
-                        # All engines failed, try CSV as last resort
+                    else:
+
                         try:
                             df = pd.read_csv(file_path)
-                            print(f"Fell back to CSV reader: {file_path}")
                         except Exception:
-                            # If that also fails, raise the last Excel error
+
                             raise last_error
                     
-                # Basic validation of the dataframe
+
                 if df.empty:
                     return Response({
                         'error': 'File contains no data'
                     }, status=status.HTTP_400_BAD_REQUEST)
                     
-                # Mark as processed
+
                 excel_file.processed = True
                 excel_file.save()
                 
-                # Update the file size information for accurate reporting
+
                 file_size = os.path.getsize(file_path)
                 
                 return Response({
@@ -198,7 +195,7 @@ class CropImageViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         instance = serializer.save(uploaded_by=self.request.user)
         
-        # Process metadata if provided
+
         metadata = self.request.data.get('metadata', [])
         if isinstance(metadata, list):
             for meta_item in metadata:
@@ -210,16 +207,15 @@ class CropImageViewSet(viewsets.ModelViewSet):
                     )
     
     def get_queryset(self):
-        # Filter to only show images uploaded by the current user
+
         return CropImage.objects.filter(uploaded_by=self.request.user).order_by('-uploaded_at')
     
     @action(detail=False, methods=['post'])
     def upload_images(self, request):
-        """Upload multiple crop images in one request"""
         csv_file_id = request.data.get('csv_file')
         sample_id_prefix = request.data.get('sample_id_prefix', '')
         
-        # Get the CSV file if provided
+
         csv_file = None
         if csv_file_id:
             try:
@@ -229,7 +225,7 @@ class CropImageViewSet(viewsets.ModelViewSet):
                     'error': 'CSV file not found'
                 }, status=status.HTTP_404_NOT_FOUND)
         
-        # Check if images are provided
+
         if 'images' not in request.FILES:
             return Response({
                 'error': 'No images provided'
@@ -237,7 +233,7 @@ class CropImageViewSet(viewsets.ModelViewSet):
         
         uploaded_images = []
         for image_file in request.FILES.getlist('images'):
-            # Create a sample ID using prefix if provided
+
             sample_id = f"{sample_id_prefix}_{len(uploaded_images) + 1}" if sample_id_prefix else None
             
             serializer = CropImageSerializer(data={
@@ -276,8 +272,7 @@ class CropImageViewSet(viewsets.ModelViewSet):
         
     @action(detail=False, methods=['get'])
     def metadata_labels(self, request):
-        """Get all unique metadata labels for crop images"""
-        # Get unique labels from ImageMetadata for the current user's images
+
         labels = ImageMetadata.objects.filter(
             image__uploaded_by=request.user
         ).values_list('label', flat=True).distinct()
@@ -292,36 +287,35 @@ class CsvFileViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     
     def perform_create(self, serializer):
-        # Save first to get the file path
+
         instance = serializer.save(uploaded_by=self.request.user)
-        # Process the file immediately after upload
+        
         self._extract_columns(instance)
     
     def get_queryset(self):
-        # Filter to only show files uploaded by the current user
+
         return CsvFile.objects.filter(uploaded_by=self.request.user).order_by('-uploaded_at')
     
     def _extract_columns(self, csv_file):
-        """Extract column names from CSV and store them in the model"""
         import hashlib
         
         try:
             file_path = csv_file.file.path
-            # Read the CSV file
+
             df = pd.read_csv(file_path)
             
-            # Generate hash of file content for change detection
+
             with open(file_path, 'rb') as f:
                 file_hash = hashlib.sha256(f.read()).hexdigest()
             
-            # Store column information
+
             csv_file.columns = list(df.columns)
             csv_file.data_hash = file_hash
             csv_file.save()
             
             return df
         except Exception as e:
-            # Log the error but don't fail
+
             print(f"Error extracting columns: {str(e)}")
             return None
             
@@ -331,13 +325,13 @@ class CsvFileViewSet(viewsets.ModelViewSet):
         
         try:
             file_path = csv_file.file.path
-            # Read the CSV file
+
             df = pd.read_csv(file_path)
             
-            # Convert to JSON for preview (first 5 rows)
+
             preview_data = df.head(5).to_dict('records')
             
-            # Include column information
+
             column_types = {}
             for col in df.columns:
                 if pd.api.types.is_numeric_dtype(df[col]):
@@ -366,20 +360,19 @@ class CsvFileViewSet(viewsets.ModelViewSet):
         try:
             file_path = csv_file.file.path
             
-            # Check if file exists
             if not os.path.exists(file_path):
                 return Response({
                     'error': 'File not found on server'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Generate hash of file content for change detection
+
             with open(file_path, 'rb') as f:
                 current_hash = hashlib.sha256(f.read()).hexdigest()
             
-            # Check if this is a re-upload of the same file (no changes)
+
             is_update = csv_file.data_hash and csv_file.data_hash != current_hash
             
-            # Read the CSV file
+
             try:
                 df = pd.read_csv(file_path)
             except pd.errors.EmptyDataError:
@@ -391,56 +384,47 @@ class CsvFileViewSet(viewsets.ModelViewSet):
                     'error': 'Could not parse the CSV file. Please check the format.'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Process each row to link with crop images by sample_id
+
             created = 0
             updated = 0
             rows_processed = 0
 
-            # Ensure sample_id column exists
+
             if 'sample_id' not in df.columns:
                 return Response({
                     'error': "CSV must contain a 'sample_id' column"
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Update the columns in the model
             csv_file.columns = list(df.columns)
             csv_file.data_hash = current_hash
             
-            # Process each row in the CSV
             for _, row in df.iterrows():
                 sample_id = row.get('sample_id')
                 if not sample_id or pd.isna(sample_id):
-                    continue  # Skip rows without a valid sample_id
+                    continue  
                     
                 rows_processed += 1
                     
-                # Look for matching crop images
                 matching_images = CropImage.objects.filter(
-                    sample_id=str(sample_id),  # Convert to string in case sample_id is numeric
+                    sample_id=str(sample_id),  
                     uploaded_by=request.user
                 )
                 
-                # Link found images to this CSV file
                 for image in matching_images:
                     if image.csv_file != csv_file:
                         image.csv_file = csv_file
                         image.save()
                         updated += 1
                 
-                # Create/update metadata for the matching images
                 for image in matching_images:
-                    # Add each column as metadata
                     for column in df.columns:
                         if column != 'sample_id' and not pd.isna(row[column]):
-                            # Format the value based on its type
                             value = row[column]
                             if isinstance(value, (int, float)) and pd.notna(value):
-                                # Format numbers without trailing zeros
                                 value = str(value).rstrip('0').rstrip('.') if '.' in str(value) else str(value)
                             else:
                                 value = str(value)
                                 
-                            # Check if this metadata already exists
                             _, created_new = ImageMetadata.objects.update_or_create(
                                 image=image,
                                 label=column,
@@ -452,7 +436,6 @@ class CsvFileViewSet(viewsets.ModelViewSet):
                             else:
                                 updated += 1
             
-            # Mark as processed
             csv_file.processed = True
             csv_file.save()
             
@@ -483,39 +466,32 @@ class CsvDataView(APIView):
             return Response({"error": "Missing file_id parameter"}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Get the file, ensuring it belongs to the current user
             csv_file = get_object_or_404(CsvFile, id=file_id, uploaded_by=request.user)
             
             if not csv_file.processed:
                 return Response({"error": "CSV file has not been processed yet"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Check if file exists 
             if not os.path.exists(csv_file.file.path):
                 return Response({"error": "File not found on server"}, status=status.HTTP_404_NOT_FOUND)
             
-            # Read the CSV file
+
             try:
                 df = pd.read_csv(csv_file.file.path)
             except Exception as e:
                 return Response({"error": f"Error reading CSV file: {str(e)}"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # If specific columns are requested, filter the dataframe
             if columns:
-                # Always include sample_id column if it exists
                 if 'sample_id' in df.columns and 'sample_id' not in columns:
                     columns.append('sample_id')
                     
-                # Filter columns that exist in the dataframe
                 valid_columns = [col for col in columns if col in df.columns]
                 if not valid_columns:
                     return Response({"error": "None of the requested columns exist in the CSV file"}, status=status.HTTP_400_BAD_REQUEST)
                 
                 df = df[valid_columns]
             
-            # Handle missing values for JSON serialization
             df = df.replace({np.nan: None})
             
-            # Prepare data for visualization
             data = {
                 'columns': list(df.columns),
                 'rows': df.to_dict('records'),
@@ -523,7 +499,6 @@ class CsvDataView(APIView):
                 'column_types': {}
             }
             
-            # Determine column types for visualization hints
             for col in df.columns:
                 if pd.api.types.is_numeric_dtype(df[col]):
                     data['column_types'][col] = 'numeric'
@@ -548,57 +523,44 @@ class ProcessedDataView(APIView):
             return Response({"error": "Missing file_id parameter"}, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Get the file, ensuring it belongs to the current user
             excel_file = get_object_or_404(ExcelFile, id=file_id, uploaded_by=request.user)
             
             if not excel_file.processed:
                 return Response([])
             
-            # Check if we have cached processed data in the session to avoid reprocessing
             cache_key = f'processed_data_{file_id}'
             processed_data = request.session.get(cache_key)
             
             if processed_data:
-                # Use cached data if available
                 return Response(processed_data)
             
             file_path = excel_file.file.path
             try:
-                # Check if file exists and is not empty
-                import os
                 if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
                     return Response({"error": "File is empty or invalid"}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Determine file type by extension
                 file_ext = os.path.splitext(file_path)[1].lower()
                 file_size = os.path.getsize(file_path)
                 
                 if file_ext == '.csv':
-                    # Process CSV file
-                    if file_size > 10 * 1024 * 1024:  # If file is larger than 10MB
-                        # Process in chunks for large files
+                    if file_size > 10 * 1024 * 1024:  
                         chunks = pd.read_csv(file_path, chunksize=1000)
                         all_data = []
                         for chunk in chunks:
                             all_data.append(chunk)
                         df = pd.concat(all_data)
                     else:
-                        # For smaller files, read normally
                         df = pd.read_csv(file_path)
                 else:
-                    # Process Excel file
-                    if file_size > 10 * 1024 * 1024:  # If file is larger than 10MB
-                        # Process in chunks for large files
+                    if file_size > 10 * 1024 * 1024:  
                         chunks = pd.read_excel(file_path, chunksize=1000)
                         all_data = []
                         for chunk in chunks:
                             all_data.append(chunk)
                         df = pd.concat(all_data)
                     else:
-                        # For smaller files, read normally
                         df = pd.read_excel(file_path, engine='openpyxl')
                 
-                # Check if dataframe is empty or has only 1 row/column
                 if df.empty:
                     return Response({"error": "File contains no data"}, status=status.HTTP_400_BAD_REQUEST)
                 elif len(df) <= 1:
@@ -606,24 +568,18 @@ class ProcessedDataView(APIView):
                 elif len(df.columns) <= 1:
                     return Response({"error": "File contains only one column of data, which is insufficient for analysis"}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Only process first 1000 rows for performance if data is very large
                 if len(df) > 1000:
                     df = df.head(1000)
                     
-                # Handle NaN values correctly - replace with None for JSON serialization
                 processed_data = df.replace({np.nan: None}).to_dict('records')
                 
-                # Additional safety check for any remaining problematic values
                 for record in processed_data:
                     for key, value in record.items():
-                        # Check for NaN, infinity values and replace with None
                         if isinstance(value, float) and (pd.isna(value) or np.isinf(value)):
                             record[key] = None
-                        # Convert any problematic types to strings
                         elif not isinstance(value, (str, int, float, bool, type(None))):
                             record[key] = str(value)
                 
-                # Cache the processed data in the session to avoid reprocessing
                 request.session[cache_key] = processed_data
                 
                 return Response(processed_data)
@@ -648,21 +604,17 @@ class GeneticDataUploadView(APIView):
             if not file:
                 return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Check file type
             file_type = 'csv' if file.name.endswith('.csv') else 'xlsx' if file.name.endswith('.xlsx') else None
             if not file_type:
                 return Response({'error': 'Invalid file type. Please upload CSV or Excel file'}, 
                               status=status.HTTP_400_BAD_REQUEST)
             
-            # Read and encrypt file content
             file.seek(0)
             original_content = file.read()
             encrypted_content = encryption_manager.encrypt_file(original_content)
             
-            # Create a new file with encrypted content
             encrypted_file = ContentFile(encrypted_content, name=file.name)
             
-            # Store metadata about the original file
             file_metadata = {
                 'original_name': file.name,
                 'original_size': len(original_content),
@@ -670,7 +622,6 @@ class GeneticDataUploadView(APIView):
                 'encryption_timestamp': str(pd.Timestamp.now())
             }
             
-            # Create GeneticData instance with encrypted file
             genetic_data = GeneticData.objects.create(
                 file=encrypted_file,
                 uploaded_by=request.user,
@@ -680,21 +631,15 @@ class GeneticDataUploadView(APIView):
             )
             
             try:
-                # Process the file using original (unencrypted) content
                 if file_type == 'csv':
                     df = pd.read_csv(pd.io.common.BytesIO(original_content))
                 else:
                     df = pd.read_excel(pd.io.common.BytesIO(original_content))
                 
-                # Check if dataframe is empty
                 if df.empty:
                     genetic_data.delete()
                     return Response({'error': 'The uploaded file is empty'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                print(f"DataFrame columns: {list(df.columns)}")
-                print(f"DataFrame shape: {df.shape}")
-                
-                # Only require essential columns for matching
                 required_columns = ['No.', 'F5 Code']
                 missing_columns = [col for col in required_columns if col not in df.columns]
                 if missing_columns:
@@ -703,7 +648,6 @@ class GeneticDataUploadView(APIView):
                         'error': f'Missing required columns: {", ".join(missing_columns)}. Found columns: {", ".join(list(df.columns))}'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Create records
                 records = []
                 for index, row in df.iterrows():
                     try:
@@ -713,7 +657,6 @@ class GeneticDataUploadView(APIView):
                             'f5_code': str(row['F5 Code'])
                         }
                         
-                        # Add optional fields if they exist
                         optional_fields = {
                             'location': '6th Location',
                             'f5_fruit_number': 'F5 Fruit #',
@@ -753,13 +696,10 @@ class GeneticDataUploadView(APIView):
                                     else:
                                         record_data[field] = str(row[column])
                                 except (ValueError, TypeError):
-                                    # Skip invalid values
                                     continue
                         
-                        # Create the record
                         genetic_record = GeneticRecord(**record_data)
                         
-                        # Store encrypted genetic signature and breeding data
                         genetic_signature = {
                             'f5_code': genetic_record.f5_code,
                             'f6_full_name': genetic_record.f6_full_name,
@@ -796,10 +736,8 @@ class GeneticDataUploadView(APIView):
                     genetic_data.delete()
                     return Response({'error': 'No valid records found in the file'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Bulk create records
                 GeneticRecord.objects.bulk_create(records)
                 
-                # Update genetic data
                 genetic_data.total_records = len(records)
                 genetic_data.processed = True
                 genetic_data.save()
@@ -831,14 +769,12 @@ class GeneticDataPreviewView(APIView):
             if not file:
                 return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Check file type
             file_type = 'csv' if file.name.endswith('.csv') else 'xlsx' if file.name.endswith('.xlsx') else None
             if not file_type:
                 return Response({'error': 'Invalid file type. Please upload CSV or Excel file'}, 
                               status=status.HTTP_400_BAD_REQUEST)
             
             try:
-                # Process the file for preview
                 if file_type == 'csv':
                     file.seek(0)
                     df = pd.read_csv(file)
@@ -846,11 +782,9 @@ class GeneticDataPreviewView(APIView):
                     file.seek(0)
                     df = pd.read_excel(file)
                 
-                # Check if dataframe is empty
                 if df.empty:
                     return Response({'error': 'The uploaded file is empty'}, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Validate required columns
                 required_columns = ['No.', 'F5 Code']
                 missing_columns = [col for col in required_columns if col not in df.columns]
                 if missing_columns:
@@ -858,7 +792,6 @@ class GeneticDataPreviewView(APIView):
                         'error': f'Missing required columns: {", ".join(missing_columns)}. Found columns: {", ".join(list(df.columns))}'
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # Convert DataFrame to list of dictionaries for preview
                 preview_data = []
                 for _, row in df.iterrows():
                     row_dict = {}
@@ -902,18 +835,14 @@ class GeneticImageMatchView(APIView):
             
             genetic_data = GeneticData.objects.get(id=genetic_data_id, uploaded_by=request.user)
             
-            # Check if number of images matches number of records
             if len(images) != genetic_data.total_records:
                 return Response({
                     'error': f'Number of images ({len(images)}) does not match number of records ({genetic_data.total_records})'
                 }, status=status.HTTP_400_BAD_REQUEST)
             
-            # Get genetic records ordered by record_number
             genetic_records = genetic_data.records.order_by('record_number')
             
-            # Create crop images and match with records
             for i, image in enumerate(images):
-                # Get the corresponding genetic record
                 genetic_record = genetic_records[i]
                 
                 crop_image = CropImage.objects.create(
@@ -923,7 +852,6 @@ class GeneticImageMatchView(APIView):
                     description=f"Genetic Record {genetic_record.record_number} - {genetic_record.f5_code}"
                 )
                 
-                # Link the image to the genetic record
                 genetic_record.image = crop_image
                 genetic_record.save()
             
@@ -951,7 +879,6 @@ class GeneticDataListView(APIView):
             
             data = []
             for genetic_data in genetic_data_list:
-                # Decrypt metadata if encrypted
                 metadata = None
                 if genetic_data.is_encrypted and genetic_data.encrypted_metadata:
                     try:
@@ -1049,29 +976,23 @@ class GeneticDataDeleteView(APIView):
                 uploaded_by=request.user
             )
             
-            # Get all associated records with images
             records = GeneticRecord.objects.filter(genetic_data=genetic_data)
             
-            # Delete associated images
             for record in records:
                 if record.image:
-                    # Delete the image file from filesystem
                     if record.image.image:
                         try:
                             record.image.image.delete()
                         except:
-                            pass  # File might not exist
-                    # Delete the CropImage instance
+                            pass  
                     record.image.delete()
             
-            # Delete the genetic data file from filesystem
             if genetic_data.file:
                 try:
                     genetic_data.file.delete()
                 except:
-                    pass  # File might not exist
+                    pass  
             
-            # Delete the genetic data and all associated records (cascade)
             genetic_data.delete()
             
             return Response({
@@ -1091,7 +1012,6 @@ class SecureFileDownloadView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, genetic_data_id):
-        """Download and decrypt genetic data file"""
         try:
             genetic_data = GeneticData.objects.get(
                 id=genetic_data_id,
@@ -1103,11 +1023,9 @@ class SecureFileDownloadView(APIView):
                     'error': 'File not found'
                 }, status=status.HTTP_404_NOT_FOUND)
             
-            # Get decrypted file content
             if genetic_data.is_encrypted:
                 decrypted_content = genetic_data.get_file_content()
                 
-                # Get original metadata
                 metadata = None
                 if genetic_data.encrypted_metadata:
                     try:
@@ -1115,7 +1033,6 @@ class SecureFileDownloadView(APIView):
                     except:
                         metadata = {}
                 
-                # Create response with decrypted content
                 from django.http import HttpResponse
                 response = HttpResponse(
                     decrypted_content,
@@ -1124,7 +1041,6 @@ class SecureFileDownloadView(APIView):
                 response['Content-Disposition'] = f'attachment; filename="{metadata.get("original_name", "genetic_data.csv")}"'
                 return response
             else:
-                # File is not encrypted, serve normally
                 from django.http import FileResponse
                 return FileResponse(
                     genetic_data.file.open('rb'),
@@ -1145,7 +1061,6 @@ class EncryptionStatusView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
-        """Get encryption status and statistics"""
         try:
             total_genetic_data = GeneticData.objects.filter(uploaded_by=request.user).count()
             encrypted_genetic_data = GeneticData.objects.filter(

@@ -6,19 +6,12 @@ import numpy as np
 import pandas as pd
 
 class DashboardDataView(APIView):
-    """
-    API view to provide data for the dashboard, including:
-    - Plant Growth Analysis data
-    """
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request):
-        """Provide data for dashboard components including Plant Growth"""
         try:
-            # Get user-specific data
             user = request.user
             
-            # Get plant growth data (sample data for demonstration)
             plant_growth_data = {
                 'growth_metrics': [
                     {
@@ -62,17 +55,14 @@ class DashboardDataView(APIView):
                 ]
             }
             
-            # Get statistics about user data
             excel_files_count = ExcelFile.objects.filter(uploaded_by=user).count()
             crop_images_count = CropImage.objects.filter(uploaded_by=user).count()
             csv_files_count = CsvFile.objects.filter(uploaded_by=user).count()
             
-            # Get latest file upload date
             latest_upload = None
             if ExcelFile.objects.filter(uploaded_by=user).exists():
                 latest_upload = ExcelFile.objects.filter(uploaded_by=user).order_by('-uploaded_at').first().uploaded_at
             
-            # Combine all data for the dashboard
             dashboard_data = {
                 'plant_growth': plant_growth_data,
                 'user_stats': {

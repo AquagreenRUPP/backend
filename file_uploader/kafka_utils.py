@@ -6,7 +6,6 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 class KafkaProducerClient:
-    """Utility class for publishing data to Kafka."""
     
     def __init__(self):
         self.bootstrap_servers = settings.KAFKA_BOOTSTRAP_SERVERS
@@ -15,7 +14,6 @@ class KafkaProducerClient:
         self.kafka_enabled = settings.KAFKA_ENABLED
     
     def _connect(self):
-        """Connect to Kafka broker."""
         if not self.kafka_enabled:
             logger.info("Kafka is disabled. Skipping connection.")
             return False
@@ -36,15 +34,6 @@ class KafkaProducerClient:
             return False
     
     def publish_data(self, data, key=None):
-        """Publish data to Kafka topic.
-        
-        Args:
-            data (dict): Data to publish
-            key (str, optional): Message key
-        
-        Returns:
-            bool: True if successful, False otherwise
-        """
         if not self.kafka_enabled:
             logger.info("Kafka is disabled. Skipping publish.")
             return True
@@ -56,7 +45,6 @@ class KafkaProducerClient:
         try:
             key_bytes = key.encode('utf-8') if key else None
             future = self.producer.send(self.topic, value=data, key=key_bytes)
-            # Block until the message is sent (or timeout)
             future.get(timeout=10)
             logger.info(f"Published data to topic {self.topic}")
             return True
@@ -65,10 +53,8 @@ class KafkaProducerClient:
             return False
     
     def close(self):
-        """Close the Kafka producer."""
         if self.producer:
             self.producer.close()
             logger.info("Kafka producer closed")
 
-# Singleton instance
 kafka_producer = KafkaProducerClient()

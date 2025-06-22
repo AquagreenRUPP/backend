@@ -12,10 +12,8 @@ class EncryptionManager:
         self.fernet = Fernet(self.key)
     
     def _get_encryption_key(self):
-        """Generate or retrieve encryption key"""
-        # Use Django SECRET_KEY as base for key derivation
         password = settings.SECRET_KEY.encode()
-        salt = b'genetic_data_salt'  # In production, store this securely
+        salt = b'genetic_data_salt'
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
@@ -26,17 +24,14 @@ class EncryptionManager:
         return key
     
     def encrypt_file(self, file_content):
-        """Encrypt file content"""
         if isinstance(file_content, str):
             file_content = file_content.encode()
         return self.fernet.encrypt(file_content)
     
     def decrypt_file(self, encrypted_content):
-        """Decrypt file content"""
         return self.fernet.decrypt(encrypted_content)
     
     def encrypt_text(self, text):
-        """Encrypt text data"""
         if not text:
             return text
         return base64.urlsafe_b64encode(
@@ -44,27 +39,23 @@ class EncryptionManager:
         ).decode()
     
     def decrypt_text(self, encrypted_text):
-        """Decrypt text data"""
         if not encrypted_text:
             return encrypted_text
         try:
             encrypted_bytes = base64.urlsafe_b64decode(encrypted_text.encode())
             return self.fernet.decrypt(encrypted_bytes).decode()
         except:
-            return encrypted_text  # Return as-is if decryption fails
+            return encrypted_text
     
     def encrypt_json(self, data):
-        """Encrypt JSON-serializable data"""
         json_str = json.dumps(data)
         return self.encrypt_text(json_str)
     
     def decrypt_json(self, encrypted_data):
-        """Decrypt JSON data"""
         decrypted_str = self.decrypt_text(encrypted_data)
         try:
             return json.loads(decrypted_str)
         except:
             return decrypted_str
 
-# Global encryption manager instance
-encryption_manager = EncryptionManager() 
+encryption_manager = EncryptionManager()
